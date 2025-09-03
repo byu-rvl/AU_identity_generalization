@@ -1,0 +1,3 @@
+[submodule "third_party/fsrt"]
+	path = third_party/fsrt
+	url = https://github.com/andrerochow/fsrt
