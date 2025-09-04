@@ -1,3 +1,6 @@
 [submodule "third_party/fsrt"]
 	path = third_party/fsrt
 	url = https://github.com/andrerochow/fsrt
+[submodule "third_party/face-alignment"]
+	path = third_party/face-alignment
+	url = https://github.com/1adrianb/face-alignment
