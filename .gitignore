@@ -1,2 +1,6 @@
 */__pycache__/*
+__pycache__/*
 *.mp4
+*.pt
+*.pth
+weights/*

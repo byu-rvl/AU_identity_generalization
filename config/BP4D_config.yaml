@@ -1,0 +1,3 @@
+dataset_path: /fslhome/andreww9/code/original_datasets/BP4D_croppped_MTCNN
+num_classes: 12
+neighbor_num: 4
