@@ -6,6 +6,7 @@ import yaml
 from skimage.transform import resize
 import numpy as np
 from skimage import img_as_ubyte
+from tqdm import tqdm
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 fsrt_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'third_party', 'fsrt'))
@@ -18,7 +19,7 @@ from srt.checkpoint import Checkpoint
 from modules.keypoint_detector import KPDetector
 from modules.expression_encoder import ExpressionEncoder
 from srt.model import FSRT
-from demo import make_animation
+from demo import extract_keypoints_and_expression, normalize_kp, forward_model
 
 class access_fsrt:
     def __init__(self):
@@ -50,15 +51,44 @@ class access_fsrt:
                                     decoder=decoder_module, expression_encoder=expression_encoder_module)
         load_dict = checkpoint.load(checkpoint_weights_path)
 
+    def make_animation(self, source_image, driving_video, model, kp_detector, cfg, max_num_pixels, relative=False, adapt_movement_scale=False):
+        _, y, x= np.meshgrid(np.zeros(2),np.arange(source_image.shape[-3]), np.arange(source_image.shape[-2]), indexing="ij")
+        idx_grids = np.stack([x, y], axis=-1).astype(np.float32)
+        #Normalize
+        idx_grids[...,0] = (idx_grids[...,0]+0.5 -((source_image.shape[-3])/2.0))/((source_image.shape[-3])/2.0)
+        idx_grids[...,1] = (idx_grids[...,1]+0.5 -((source_image.shape[-2])/2.0))/((source_image.shape[-2])/2.0)
+        idx_grids = torch.from_numpy(idx_grids).cuda().unsqueeze(0)
+        z = None
+        with torch.no_grad():
+            predictions = []
+            source = torch.tensor(source_image.astype(np.float32)).permute(0, 3, 1, 2).cuda()
+            driving = torch.tensor(np.array(driving_video)[np.newaxis].astype(np.float32)).permute(0, 4, 1, 2, 3)
+            kp_source, expression_vector_src = extract_keypoints_and_expression(source.clone(), model, kp_detector,cfg, src=True)
+            kp_driving_initial, _ = extract_keypoints_and_expression(driving[:, :, 0].cuda().clone(), model, kp_detector,cfg)
+
+            for frame_idx in range(driving.shape[2]):
+                driving_frame = driving[:, :, frame_idx].cuda()
+                kp_driving, expression_vector_driv = extract_keypoints_and_expression(driving_frame.clone(), model, kp_detector,cfg)
+                
+                kp_norm = normalize_kp(kp_source=kp_source[0], kp_driving=kp_driving,
+                                    kp_driving_initial=kp_driving_initial, use_relative_movement=relative,
+                                    adapt_movement_scale=adapt_movement_scale)
+                    
+                out, z =  forward_model(model,expression_vector_src, kp_source, expression_vector_driv, kp_norm, source.unsqueeze(0), idx_grids, cfg, max_num_pixels, z=z)
+                #img_kp = torch.from_numpy(draw_image_with_kp(torch.clamp(out[0],0.,1.).cpu().numpy(),kp_norm['kp'][0].cpu().numpy()))
+                predictions.append(torch.cat([driving_frame.detach()[0].permute(1,2,0).cpu(),torch.clamp(out[0],0.,1.)],dim=-2))
+        return predictions
+
+    
     def run_fsrt_list(self, source_image, driving_video, save=False):
         '''
         Inputs:
-            source_image: list of np.array images of shape (256, 256, 3)
+            source_image: np.array of np.array images of shape (256, 256, 3)
             driving_video: list of np.array images of shape (256, 256, 3)
             save: boolean of whether to save the video as res
  
         '''
-        predictions = make_animation(source_image, driving_video, self.model, self.kp_detector, relative=self.relative, adapt_movement_scale=self.adapt_scale, cfg=self.cfg, max_num_pixels=self.max_num_pixels)
+        predictions = self.make_animation(source_image, driving_video, self.model, self.kp_detector, relative=self.relative, adapt_movement_scale=self.adapt_scale, cfg=self.cfg, max_num_pixels=self.max_num_pixels)
         predictions = [x[:, 256:, :] for x in predictions]
 
         if save:

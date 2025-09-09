@@ -1,16 +1,32 @@
+import imageio
+from skimage.transform import resize
 import numpy as np
 import random
 from PIL import Image
 from torch.utils.data import Dataset
+import torchvision.transforms as transforms
 import os
 
+from third_party_helpers.access_fsrt import access_fsrt
 
-def make_dataset(image_list, label_list, au_relation=None, landmark_list=None):
+
+def make_dataset(image_list, label_list, au_relation=None, landmark_list=None, train=False):
     len_ = len(image_list)
     if au_relation is not None:
+        raise ("Not implemented for AU relation")
         images = [(image_list[i].strip(),  label_list[i, :],au_relation[i,:], landmark_list[i].strip()) for i in range(len_)]
     else:
-        images = [(image_list[i].strip(),  label_list[i, :]) for i in range(len_)]
+        images = [(image_list[i].strip(),  label_list[i, :], "") for i in range(len_)]
+    
+    if train:
+        print("Using identity augmentation", train)
+        identities_path = ["/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00022_frame.jpg"]
+        num_identities = len(identities_path)
+        new_images = images.copy()
+        for i in range(num_identities):
+            add_images = [(x[0], x[1], identities_path[i]) for x in images]
+            new_images += add_images
+        images = new_images
     return images
 
 
@@ -107,9 +123,9 @@ class BP4D(Dataset):
             if self._stage == 2:
                 au_relation_list_path = os.path.join(root_path, 'list', 'BP4D_train_AU_relation_fold' + str(fold) + '.txt')
                 au_relation_list = np.loadtxt(au_relation_list_path)
-                self.data_list = make_dataset(train_image_list, train_label_list, au_relation_list, train_landmark_list)
+                self.data_list = make_dataset(train_image_list, train_label_list, au_relation_list, train_landmark_list, train=self._train)
             else:
-                self.data_list = make_dataset(train_image_list, train_label_list)
+                self.data_list = make_dataset(train_image_list, train_label_list, train=self._train)
 
         else:
             # img
@@ -119,7 +135,9 @@ class BP4D(Dataset):
             # img labels
             test_label_list_path = os.path.join(root_path, 'list', 'BP4D_test_label_fold' + str(fold) + '.txt')
             test_label_list = np.loadtxt(test_label_list_path)
-            self.data_list = make_dataset(test_image_list, test_label_list)
+            self.data_list = make_dataset(test_image_list, test_label_list, train=self._train)
+        self.fsrt_model = access_fsrt()
+        self.to_pil = transforms.ToPILImage()
 
     def __getitem__(self, index):
         if self._stage == 2 and self._train:
@@ -135,8 +153,20 @@ class BP4D(Dataset):
                 img = self._transform(img, flip, offset_x, offset_y)
             return img, label, au_relation, landmark
         else:
-            img, label = self.data_list[index]
-            img = self.loader(os.path.join(self.img_folder_path, img))
+            img, label, new_identity = self.data_list[index]
+            if new_identity != "":
+                driving_video = [imageio.imread(os.path.join(self.img_folder_path, img))]
+                source_image = np.array([resize(imageio.imread(new_identity), (256, 256))[..., :3]])
+                # predictions = self.fsrt_model.run_fsrt_list(source_image, driving_video, save=False)
+                # idx_grids, source = self.fsrt_model.run_normalize_list(source_image)
+                # predictions = self.fsrt_model.run_fsrt_list_normalized(source, idx_grids, driving_video, save=False)
+                predictions = self.fsrt_model.run_fsrt_list(source_image, driving_video)
+
+                img = predictions[0]
+                img = img.permute(2, 0, 1)
+                img = self.to_pil(img)
+            else:
+                img = self.loader(os.path.join(self.img_folder_path, img))
 
             if self._train:
                 w, h = img.size
@@ -182,9 +212,9 @@ class DISFA(Dataset):
             if self._stage == 2:
                 au_relation_list_path = os.path.join(root_path, 'list', 'DISFA_train_AU_relation_fold' + str(fold) + '.txt')
                 au_relation_list = np.loadtxt(au_relation_list_path)
-                self.data_list = make_dataset(train_image_list, train_label_list, au_relation_list, train_landmark_list)
+                self.data_list = make_dataset(train_image_list, train_label_list, au_relation_list, train_landmark_list, train=self._train)
             else:
-                self.data_list = make_dataset(train_image_list, train_label_list)
+                self.data_list = make_dataset(train_image_list, train_label_list, train=self._train)
 
         else:
             # img
@@ -194,7 +224,7 @@ class DISFA(Dataset):
             # img labels
             test_label_list_path = os.path.join(root_path, 'list', 'DISFA_test_label_fold' + str(fold) + '.txt')
             test_label_list = np.loadtxt(test_label_list_path)
-            self.data_list = make_dataset(test_image_list, test_label_list)
+            self.data_list = make_dataset(test_image_list, test_label_list, train=self._train)
 
     def __getitem__(self, index, returnPath=False):
         if self._stage == 2 and self._train:

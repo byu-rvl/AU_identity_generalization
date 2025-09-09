@@ -140,6 +140,8 @@ def main(conf):
 
 
 if __name__=="__main__":
+    import torch.multiprocessing as mp
+    mp.set_start_method('spawn', force=True) # ADD THESE TWO LINES
     conf = get_config()
     set_env(conf)
     # generate outdir name
