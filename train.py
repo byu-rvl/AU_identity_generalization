@@ -61,12 +61,12 @@ def val(net,val_loader,criterion):
     losses = AverageMeter()
     net.eval()
     statistics_list = None
-    for batch_idx, (inputs, targets, _) in enumerate(tqdm(val_loader)):
+    for batch_idx, (inputs, targets) in enumerate(tqdm(val_loader)):
         with torch.no_grad():
             targets = targets.float()
             if torch.cuda.is_available():
                 inputs, targets = inputs.cuda(), targets.cuda()
-            outputs = net(inputs)
+            outputs, _, _, _ = net(inputs)
             loss = criterion(outputs, targets)
             losses.update(loss.data.item(), inputs.size(0))
             update_list = statistics(outputs, targets.detach(), 0.5)

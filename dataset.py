@@ -154,25 +154,30 @@ class BP4D(Dataset):
                 img = self._transform(img, flip, offset_x, offset_y)
             return img, label, au_relation, landmark
         else:
-            img, label, new_identity = self.data_list[index]
-            if new_identity != "":
-                source_image = np.array(resize(imageio.imread(new_identity), (256, 256))[..., :3])
-            else:
-                source_image = np.array([])
-            # img = self.loader(os.path.join(self.img_folder_path, img))
-            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
+            if self._train:
+                img, label, new_identity = self.data_list[index]
+                if new_identity != "":
+                    source_image = np.array(resize(imageio.imread(new_identity), (256, 256))[..., :3])
+                else:
+                    source_image = np.array([])
+                img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
 
-            # if self._train:
-            #     w, h = img.size
-            #     offset_y = random.randint(0, h - self.crop_size)
-            #     offset_x = random.randint(0, w - self.crop_size)
-            #     flip = random.randint(0, 1)
-            #     if self._transform is not None:
-            #         img = self._transform(img, flip, offset_x, offset_y)
-            # else:
-            #     if self._transform is not None:
-            #         img = self._transform(img)
-            return img, label, source_image
+                return img, label, source_image
+            else:
+                img, label, _ = self.data_list[index]
+                img = self.loader(os.path.join(self.img_folder_path, img))
+
+                if self._train:
+                    w, h = img.size
+                    offset_y = random.randint(0, h - self.crop_size)
+                    offset_x = random.randint(0, w - self.crop_size)
+                    flip = random.randint(0, 1)
+                    if self._transform is not None:
+                        img = self._transform(img, flip, offset_x, offset_y)
+                else:
+                    if self._transform is not None:
+                        img = self._transform(img)
+                return img, label
 
     def __len__(self):
         return len(self.data_list)
