@@ -106,25 +106,42 @@ class access_fsrt:
         idx_grids[...,0] = (idx_grids[...,0]+0.5 -((source_image.shape[-3])/2.0))/((source_image.shape[-3])/2.0)
         idx_grids[...,1] = (idx_grids[...,1]+0.5 -((source_image.shape[-2])/2.0))/((source_image.shape[-2])/2.0)
         idx_grids = torch.from_numpy(idx_grids).cuda().unsqueeze(0)
+        # Repeat idx_grids for batch size
+        idx_grids = idx_grids.repeat(driving_video.shape[0], 1, 1, 1, 1)
+
         z = None
         with torch.no_grad():
             predictions = []
             source = torch.tensor(source_image.astype(np.float32)).permute(0, 3, 1, 2).cuda()
-            driving = torch.tensor(np.array(driving_video)[np.newaxis].astype(np.float32)).permute(0, 4, 1, 2, 3)
+            # driving = torch.tensor(np.array(driving_video)[np.newaxis].astype(np.float32)).permute(0, 4, 1, 2, 3)
+            driving = driving_video.permute(0, 3, 1, 2).cuda()
             kp_source, expression_vector_src = extract_keypoints_and_expression(source.clone(), model, kp_detector,cfg, src=True)
-            kp_driving_initial, _ = extract_keypoints_and_expression(driving[:, :, 0].cuda().clone(), model, kp_detector,cfg)
+            kp_driving_initial, _ = extract_keypoints_and_expression(driving.clone(), model, kp_detector,cfg)
 
-            for frame_idx in range(driving.shape[2]):
-                driving_frame = driving[:, :, frame_idx].cuda()
-                kp_driving, expression_vector_driv = extract_keypoints_and_expression(driving_frame.clone(), model, kp_detector,cfg)
+            driving_frame = driving
+            # driving_frame = driving_video.permute(0, 3, 1, 2).cuda()
+            kp_driving, expression_vector_driv = extract_keypoints_and_expression(driving_frame.clone(), model, kp_detector,cfg)
+            
+            # kp_norm = normalize_kp(kp_source=kp_source[0], kp_driving=kp_driving,
+            #                     kp_driving_initial=kp_driving_initial, use_relative_movement=relative,
+            #                     adapt_movement_scale=adapt_movement_scale)
+            kp_norm = kp_driving
+
+            # Repeat expression_vector_src for batch size
+            # print("expression_vector_src shape", expression_vector_src.shape)
+            expression_vector_src = expression_vector_src.squeeze(1)
+            expression_vector_src = expression_vector_src.repeat(driving_video.shape[0], 1, 1)
+            # print("expression_vector_src shape after repeat", expression_vector_src.shape)
+
+            kp_source = kp_source.repeat(driving_video.shape[0], 1, 1, 1)
+
+            source_repeated = source.repeat(driving_video.shape[0], 1, 1, 1)
                 
-                kp_norm = normalize_kp(kp_source=kp_source[0], kp_driving=kp_driving,
-                                    kp_driving_initial=kp_driving_initial, use_relative_movement=relative,
-                                    adapt_movement_scale=adapt_movement_scale)
-                    
-                out, z =  forward_model(model,expression_vector_src, kp_source, expression_vector_driv, kp_norm, source.unsqueeze(0), idx_grids, cfg, max_num_pixels, z=z)
-                #img_kp = torch.from_numpy(draw_image_with_kp(torch.clamp(out[0],0.,1.).cpu().numpy(),kp_norm['kp'][0].cpu().numpy()))
-                predictions.append(torch.cat([driving_frame.detach()[0].permute(1,2,0).cpu(),torch.clamp(out[0],0.,1.)],dim=-2))
+            out, z =  forward_model(model,expression_vector_src, kp_source, expression_vector_driv, kp_norm, source_repeated, idx_grids, cfg, max_num_pixels, z=z)
+            #img_kp = torch.from_numpy(draw_image_with_kp(torch.clamp(out[0],0.,1.).cpu().numpy(),kp_norm['kp'][0].cpu().numpy()))
+            # predictions.append(torch.cat([driving_frame.detach()[0].permute(1,2,0).cpu(),torch.clamp(out[0],0.,1.)],dim=-2))
+            # predictions = torch.cat([driving_frame.detach()[0].permute(1,2,0).cpu(),torch.clamp(out[0],0.,1.)],dim=-2)
+            predictions = driving_frame
         return predictions
 
     def run_fsrt_list_batch(self, source_images, driving_videos):
@@ -138,12 +155,11 @@ class access_fsrt:
         source_images = source_images.float()
         driving_videos = driving_videos.float()
         predictions = self.make_animation_batch(np.array([source_images[0]]), driving_videos, self.model, self.kp_detector, relative=self.relative, adapt_movement_scale=self.adapt_scale, cfg=self.cfg, max_num_pixels=self.max_num_pixels)
-
-        predictions = [x[:, 256:, :] for x in predictions]
-        predictions = torch.tensor(np.array(predictions))
-        predictions = predictions.permute(0, 3, 1, 2)
+        # predictions = [x[:, 256:, :] for x in predictions]
+        # predictions = torch.tensor(np.array(predictions))
+        # predictions = predictions.permute(0, 3, 2, 1)
         predictions = [self.resize_transform(x) for x in predictions]
-        predictions = torch.tensor(np.array(predictions))
+        predictions = torch.stack(predictions)
 
         return predictions
 
