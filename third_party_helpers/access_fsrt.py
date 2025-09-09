@@ -51,6 +51,13 @@ class access_fsrt:
         load_dict = checkpoint.load(checkpoint_weights_path)
 
     def run_fsrt_list(self, source_image, driving_video, save=False):
+        '''
+        Inputs:
+            source_image: list of np.array images of shape (256, 256, 3)
+            driving_video: list of np.array images of shape (256, 256, 3)
+            save: boolean of whether to save the video as res
+ 
+        '''
         predictions = make_animation(source_image, driving_video, self.model, self.kp_detector, relative=self.relative, adapt_movement_scale=self.adapt_scale, cfg=self.cfg, max_num_pixels=self.max_num_pixels)
         predictions = [x[:, 256:, :] for x in predictions]
 
