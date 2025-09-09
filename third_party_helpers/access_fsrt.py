@@ -127,37 +127,33 @@ class access_fsrt:
             #                     adapt_movement_scale=adapt_movement_scale)
             kp_norm = kp_driving
 
-            # Repeat expression_vector_src for batch size
-            # print("expression_vector_src shape", expression_vector_src.shape)
             expression_vector_src = expression_vector_src.squeeze(1)
             expression_vector_src = expression_vector_src.repeat(driving_video.shape[0], 1, 1)
-            # print("expression_vector_src shape after repeat", expression_vector_src.shape)
 
             kp_source = kp_source.repeat(driving_video.shape[0], 1, 1, 1)
 
             source_repeated = source.repeat(driving_video.shape[0], 1, 1, 1)
                 
             out, z =  forward_model(model,expression_vector_src, kp_source, expression_vector_driv, kp_norm, source_repeated, idx_grids, cfg, max_num_pixels, z=z)
-            #img_kp = torch.from_numpy(draw_image_with_kp(torch.clamp(out[0],0.,1.).cpu().numpy(),kp_norm['kp'][0].cpu().numpy()))
-            # predictions.append(torch.cat([driving_frame.detach()[0].permute(1,2,0).cpu(),torch.clamp(out[0],0.,1.)],dim=-2))
-            # predictions = torch.cat([driving_frame.detach()[0].permute(1,2,0).cpu(),torch.clamp(out[0],0.,1.)],dim=-2)
-            predictions = driving_frame
+            out = out.permute(0, 3, 1, 2)
+            predictions = out
         return predictions
 
-    def run_fsrt_list_batch(self, source_images, driving_videos):
+    def run_fsrt_list_batch(self, source_images, driving_videos, save=False):
         '''
         Inputs:
             source_images: np.array of np.array images of shape (B, 256, 256, 3)
             driving_videos: list of list of np.array images of shape (B, T, 256, 256, 3)
             save: boolean of whether to save the video as result
         '''
-        # Make source_images double not float
-        source_images = source_images.float()
         driving_videos = driving_videos.float()
-        predictions = self.make_animation_batch(np.array([source_images[0]]), driving_videos, self.model, self.kp_detector, relative=self.relative, adapt_movement_scale=self.adapt_scale, cfg=self.cfg, max_num_pixels=self.max_num_pixels)
-        # predictions = [x[:, 256:, :] for x in predictions]
-        # predictions = torch.tensor(np.array(predictions))
-        # predictions = predictions.permute(0, 3, 2, 1)
+        predictions = self.make_animation_batch(np.array([source_images]), driving_videos, self.model, self.kp_detector, relative=self.relative, adapt_movement_scale=self.adapt_scale, cfg=self.cfg, max_num_pixels=self.max_num_pixels)
+
+        if save:
+            for i, frame in enumerate(predictions):
+                print("frame.shape:", frame.shape)
+                imageio.imwrite(f"output/frame_{i}.png", img_as_ubyte(frame.permute(1, 2, 0).cpu().numpy()))
+
         predictions = [self.resize_transform(x) for x in predictions]
         predictions = torch.stack(predictions)
 

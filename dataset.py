@@ -16,18 +16,7 @@ def make_dataset(image_list, label_list, au_relation=None, landmark_list=None, t
         raise ("Not implemented for AU relation")
         images = [(image_list[i].strip(),  label_list[i, :],au_relation[i,:], landmark_list[i].strip()) for i in range(len_)]
     else:
-        images = [(image_list[i].strip(),  label_list[i, :], "") for i in range(len_)]
-    
-    if train:
-        print("Using identity augmentation", train)
-        identities_path = ["/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00022_frame.jpg"]
-        num_identities = len(identities_path)
-        # new_images = images.copy()
-        new_images = []
-        for i in range(num_identities):
-            add_images = [(x[0], x[1], identities_path[i]) for x in images]
-            new_images += add_images
-        images = new_images
+        images = [(image_list[i].strip(),  label_list[i, :]) for i in range(len_)]
     return images
 
 
@@ -155,16 +144,13 @@ class BP4D(Dataset):
             return img, label, au_relation, landmark
         else:
             if self._train:
-                img, label, new_identity = self.data_list[index]
-                if new_identity != "":
-                    source_image = np.array(resize(imageio.imread(new_identity), (256, 256))[..., :3])
-                else:
-                    source_image = np.array([])
+                img, label = self.data_list[index]
+
                 img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
 
-                return img, label, source_image
+                return img, label
             else:
-                img, label, _ = self.data_list[index]
+                img, label = self.data_list[index]
                 img = self.loader(os.path.join(self.img_folder_path, img))
 
                 if self._train:

@@ -6,6 +6,8 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 from tqdm import tqdm
 import logging
+import glob
+import imageio
 
 from model.encoder_gcn import MEFARG
 from dataset import *
@@ -38,10 +40,19 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
     losses = AverageMeter()
     net.train()
     train_loader_len = len(train_loader)
-    for batch_idx, (inputs,  targets, source) in enumerate(tqdm(train_loader)):
+    all_sources = list(glob.glob("/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/*.jpg"))
+    np.random.shuffle(all_sources)
+    use_sources = []
+    while len(use_sources) < train_loader_len:
+        use_sources += all_sources
+    use_sources = use_sources[:train_loader_len]
+
+    for batch_idx, (inputs,  targets) in enumerate(tqdm(train_loader)):
+        # Load source:
+        source_image = resize(imageio.imread(use_sources[batch_idx]), (256, 256))[..., :3]
         # Preprocessing:
         with torch.no_grad():
-            inputs = fsrt_model.run_fsrt_list_batch(inputs, source)
+            inputs = fsrt_model.run_fsrt_list_batch(source_image, inputs)
 
         adjust_learning_rate(optimizer, epoch, conf.epochs, conf.learning_rate, batch_idx, train_loader_len)
         targets = targets.float()
