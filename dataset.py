@@ -22,7 +22,8 @@ def make_dataset(image_list, label_list, au_relation=None, landmark_list=None, t
         print("Using identity augmentation", train)
         identities_path = ["/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00022_frame.jpg"]
         num_identities = len(identities_path)
-        new_images = images.copy()
+        # new_images = images.copy()
+        new_images = []
         for i in range(num_identities):
             add_images = [(x[0], x[1], identities_path[i]) for x in images]
             new_images += add_images
@@ -155,30 +156,23 @@ class BP4D(Dataset):
         else:
             img, label, new_identity = self.data_list[index]
             if new_identity != "":
-                driving_video = [imageio.imread(os.path.join(self.img_folder_path, img))]
-                source_image = np.array([resize(imageio.imread(new_identity), (256, 256))[..., :3]])
-                # predictions = self.fsrt_model.run_fsrt_list(source_image, driving_video, save=False)
-                # idx_grids, source = self.fsrt_model.run_normalize_list(source_image)
-                # predictions = self.fsrt_model.run_fsrt_list_normalized(source, idx_grids, driving_video, save=False)
-                predictions = self.fsrt_model.run_fsrt_list(source_image, driving_video)
-
-                img = predictions[0]
-                img = img.permute(2, 0, 1)
-                img = self.to_pil(img)
+                source_image = np.array(resize(imageio.imread(new_identity), (256, 256))[..., :3])
             else:
-                img = self.loader(os.path.join(self.img_folder_path, img))
+                source_image = np.array([])
+            # img = self.loader(os.path.join(self.img_folder_path, img))
+            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
 
-            if self._train:
-                w, h = img.size
-                offset_y = random.randint(0, h - self.crop_size)
-                offset_x = random.randint(0, w - self.crop_size)
-                flip = random.randint(0, 1)
-                if self._transform is not None:
-                    img = self._transform(img, flip, offset_x, offset_y)
-            else:
-                if self._transform is not None:
-                    img = self._transform(img)
-            return img, label
+            # if self._train:
+            #     w, h = img.size
+            #     offset_y = random.randint(0, h - self.crop_size)
+            #     offset_x = random.randint(0, w - self.crop_size)
+            #     flip = random.randint(0, 1)
+            #     if self._transform is not None:
+            #         img = self._transform(img, flip, offset_x, offset_y)
+            # else:
+            #     if self._transform is not None:
+            #         img = self._transform(img)
+            return img, label, source_image
 
     def __len__(self):
         return len(self.data_list)

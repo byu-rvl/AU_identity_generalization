@@ -12,6 +12,9 @@ from dataset import *
 from utils import *
 from conf import get_config,set_logger,set_outdir,set_env
 
+from third_party_helpers.access_fsrt import access_fsrt
+
+fsrt_model = access_fsrt()
 
 def get_dataloader(conf):
     print('==> Preparing data...')
@@ -35,7 +38,11 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
     losses = AverageMeter()
     net.train()
     train_loader_len = len(train_loader)
-    for batch_idx, (inputs,  targets) in enumerate(tqdm(train_loader)):
+    for batch_idx, (inputs,  targets, source) in enumerate(tqdm(train_loader)):
+        # Preprocessing:
+        with torch.no_grad():
+            inputs = fsrt_model.run_fsrt_list_batch(inputs, source)
+
         adjust_learning_rate(optimizer, epoch, conf.epochs, conf.learning_rate, batch_idx, train_loader_len)
         targets = targets.float()
         if torch.cuda.is_available():
@@ -54,7 +61,7 @@ def val(net,val_loader,criterion):
     losses = AverageMeter()
     net.eval()
     statistics_list = None
-    for batch_idx, (inputs, targets) in enumerate(tqdm(val_loader)):
+    for batch_idx, (inputs, targets, _) in enumerate(tqdm(val_loader)):
         with torch.no_grad():
             targets = targets.float()
             if torch.cuda.is_available():
