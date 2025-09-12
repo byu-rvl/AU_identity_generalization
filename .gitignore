@@ -4,3 +4,5 @@ __pycache__/*
 *.pt
 *.pth
 weights/*
+output/
+*.task
