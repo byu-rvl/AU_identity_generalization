@@ -158,10 +158,9 @@ class access_fsrt:
                 print("source_images.shape:", source_images.shape, np.max(source_images), np.min(source_images), source_images.dtype)
                 print("driving_videos.shape:", driving_videos.shape, torch.max(driving_videos), torch.min(driving_videos), driving_videos.dtype)
 
-                imageio.imwrite(f"output/{i}_frame.png", img_as_ubyte(frame.permute(1, 2, 0).cpu().numpy()))
-                imageio.imwrite(f"output/{i}_source.png", img_as_ubyte(source_images))
-                imageio.imwrite(f"output/{i}_driving.png", img_as_ubyte(driving_videos[i].cpu().numpy()))
-            raise Exception("Saved frames")
+                imageio.imwrite(f"output/{save}_{i}_frame.png", img_as_ubyte(frame.permute(1, 2, 0).cpu().numpy()))
+                imageio.imwrite(f"output/{save}_{i}_source.png", img_as_ubyte(source_images))
+                imageio.imwrite(f"output/{save}_{i}_driving.png", img_as_ubyte(driving_videos[i].cpu().numpy()))
         return predictions
 
     def run_fsrt_image_video(self, source_image_path, driving_video_path):
