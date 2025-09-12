@@ -40,7 +40,8 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
     losses = AverageMeter()
     net.train()
     train_loader_len = len(train_loader)
-    all_sources = list(glob.glob("/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/*.jpg"))
+    # all_sources = list(glob.glob("/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/*.jpg"))
+    all_sources = list(glob.glob("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn/*.jpg"))
     np.random.shuffle(all_sources)
     use_sources = []
     while len(use_sources) < train_loader_len:

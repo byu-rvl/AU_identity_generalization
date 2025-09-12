@@ -1,9 +1,12 @@
+import argparse
 import cv2
 import glob
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import numpy as np
+import tqdm
+from pathlib import Path
 
 
 class MediaPipeFaceRotationEstimator:
@@ -29,15 +32,20 @@ class MediaPipeFaceRotationEstimator:
         face_landmarker_result = self.landmarker.detect(mp_image)
         
         if not face_landmarker_result.facial_transformation_matrixes or not face_landmarker_result.face_landmarks:
-            print("No face detected.")
+            # print("No face detected.")
             return None, None, None
+
         transformation_matrix = face_landmarker_result.facial_transformation_matrixes
         landmarks = face_landmarker_result.face_landmarks
-        pitch = np.arcsin(-transformation_matrix[0][2][1]) * 180.0 / np.pi
-        yaw = np.arctan2(transformation_matrix[0][2][0], transformation_matrix[0][2][2]) * 180.0 / np.pi
-        roll = np.arctan2(transformation_matrix[0][0][1], transformation_matrix[0][1][1]) * 180.0 / np.pi
 
-        return transformation_matrix, [pitch, yaw, roll], landmarks
+        all_euler_angles = []
+        for matrix in transformation_matrix:
+            pitch = np.arcsin(-matrix[2][1]) * 180.0 / np.pi
+            yaw = np.arctan2(matrix[2][0], matrix[2][2]) * 180.0 / np.pi
+            roll = np.arctan2(matrix[0][1], matrix[1][1]) * 180.0 / np.pi
+            all_euler_angles.append([pitch, yaw, roll])
+
+        return transformation_matrix, all_euler_angles, landmarks
 
     def close(self):
         self.landmarker.close()
@@ -216,12 +224,12 @@ class find_static_faces:
 
         success_frame_cntr = 0
 
-        for frame_name, frame in zip(frame_names, list_of_frames):
-            rot_matrix, euler_angles, landmarks = estimator.get_rotation_matrix(frame)
+        for indx, (frame_name, frame) in enumerate(zip(frame_names, list_of_frames)):
+            rot_matrix, all_euler_angles, landmarks = estimator.get_rotation_matrix(frame)
             if not landmarks:
                 continue
             
-            for i, landmark in enumerate(landmarks):
+            for i, (landmark, euler_angles) in enumerate(zip(landmarks, all_euler_angles)):
                 if len(landmark) == 0:
                     continue
                 lip_distance = self.distance_between_lips(landmark)
@@ -234,11 +242,14 @@ class find_static_faces:
                 all_pitches.append(abs(euler_angles[0]))
                 all_yaws.append(abs(euler_angles[1]))
 
-                results[f'{frame_name} face{i}_of_{len(landmarks)}'] = (lip_distance, amnt_unrelaxed, eye_open_amount, euler_angles)
+                results[f'{frame_name} face{i}_of_{len(landmarks)}'] = (indx, lip_distance, amnt_unrelaxed, eye_open_amount, euler_angles)
 
             success_frame_cntr += 1
         estimator.close()
 
+        if len(all_lip_distances) == 0:
+            return []
+        
         all_lip_distances = np.array(all_lip_distances)
         all_amnt_unrelaxed = np.array(all_amnt_unrelaxed)
         all_eye_open_amounts = np.array(all_eye_open_amounts)
@@ -257,70 +268,103 @@ class find_static_faces:
         best_index = np.argmin(final_scores)
         best_frame_name = list(results.keys())[best_index]
         best_metrics = results[best_frame_name]
+        best_frame_return = list_of_frames[best_metrics[0]]
 
-        print("Best frame:", best_frame_name)
-        print("Metrics (lip_distance, amnt_unrelaxed, eye_open_amount):", best_metrics)
+        # print("Best frame:", best_frame_name)
+        # print("Metrics (lip_distance, amnt_unrelaxed, eye_open_amount):", best_metrics)
 
-        # Print all results in order of final score
-        sorted_indices = np.argsort(final_scores)
-        print("\nAll frames ranked by final score:")
-        for rank, idx in enumerate(sorted_indices):
-            frame_name = list(results.keys())[idx]
-            metrics = results[frame_name]
-            print(f"Rank {rank + 1}: {frame_name} - Metrics: {metrics}")
-            # Only print the first 200
-            if rank >= 200:
-                break
+        # # Print all results in order of final score
+        # sorted_indices = np.argsort(final_scores)
+        # print("\nAll frames ranked by final score:")
+        # for rank, idx in enumerate(sorted_indices):
+        #     frame_name = list(results.keys())[idx]
+        #     metrics = results[frame_name]
+        #     print(f"Rank {rank + 1}: {frame_name} - Metrics: {metrics}")
+        #     # Only print the first 200
+        #     if rank >= 200:
+        #         break
 
-        print("Successfully processed frames percentage:", (success_frame_cntr / len(frame_names)) * 100, len(frame_names), success_frame_cntr)
-
+        # print("Successfully processed frames percentage:", (success_frame_cntr / len(frame_names)) * 100, len(frame_names), success_frame_cntr)
         
-        return best_frame_name, best_metrics
+        return best_frame_return
         
 
 if __name__ == '__main__':
-    image_directory = "/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/"
-    all_images = []
-    all_image_names = []
-    for img_path in glob.glob(image_directory + "*.jpg"):
-        img = cv2.imread(img_path)
-        if img is not None:
-            all_images.append(img)
-            all_image_names.append(img_path)
-    analysis = find_static_faces()
-    analysis.find_best_frame_list(all_images, all_image_names)
+    # argsparser = argparse.ArgumentParser()
+    # argsparser.add_argument('--id', type=str, help='Identity to process', required=True, default=None)
+    # args = argsparser.parse_args()
+    # id_to_process = args.id
+
+    # vox_celeb1_dir = "/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train/"
+    # vox_celeb1_dir_best_frames = "/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames/"
+
+    # analysis = find_static_faces()
+    
+    # all_options = list(glob.glob(vox_celeb1_dir + "/" + id_to_process + "/*/"))
+    # all_options.sort()
+    # for option in all_options:
+    #     all_videos = list(glob.glob(option + "**/*.mp4"))
+    #     all_videos.sort()
+    #     all_frames = []
+    #     all_frame_names = []
+    #     for video in all_videos:
+    #         video_name = video.split("/")[-1].replace(".mp4", "")
+    #         cap = cv2.VideoCapture(video)
+    #         frame_cntr = 0
+    #         success = True
+    #         while success:
+    #             success, frame = cap.read()
+    #             if success:
+    #                 all_frames.append(frame)
+    #                 all_frame_names.append(f"{video_name}_frame{frame_cntr}")
+    #                 frame_cntr += 1
+    #         cap.release()
+    #     if len(all_frames) == 0:
+    #         continue
+        
+    #     best_frame = analysis.find_best_frame_list(all_frames, all_frame_names)
+    #     saveHere = Path(vox_celeb1_dir_best_frames) / (id_to_process + "_" + Path(option).name + ".jpg")
+    #     if len(best_frame) == 0:
+    #         print("No best frame found for:", id_to_process, option)
+    #         continue
+    #     print("Saving to:", saveHere)
+    #     saveHere.parent.mkdir(parents=True, exist_ok=True)
+    #     cv2.imwrite(str(saveHere), best_frame)
+
 
 
 
     # Make sure you have an image file named 'face_image.jpg' in the same directory,
     # or change the path to your image file.
     # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00019_frame.jpg'
-    # # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00026_frame.jpg'
-    # # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00078_frame.jpg'
-    # # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00188_frame.jpg'
+    # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00026_frame.jpg'
+    # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00078_frame.jpg'
+    # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00188_frame.jpg'
+    image_path = '/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames/id10009_seo9TTTEoE4.jpg'
     
-    # input_image = cv2.imread(image_path)
-    # if input_image is None:
-    #     raise FileNotFoundError(f"Image not found at path: {image_path}")
+    
+    input_image = cv2.imread(image_path)
+    if input_image is None:
+        raise FileNotFoundError(f"Image not found at path: {image_path}")
 
-    # # 1. Initialize
-    # estimator = MediaPipeFaceRotationEstimator()
-    # analysis = find_static_faces()
+    # 1. Initialize
+    estimator = MediaPipeFaceRotationEstimator()
+    analysis = find_static_faces()
 
-    # # 3. Clean up
-    # estimator.close()
+    # 3. Clean up
+    estimator.close()
 
-    # # 4. Find important information from landmarks
+    # 4. Find important information from landmarks
     # if landmarks:
-    #     # 2. Get the rotation matrix from the image
-    #     rot_matrix, euler_angles, landmarks = estimator.get_rotation_matrix(input_image)
-    #     print(f"Euler angles (pitch, yaw, roll): {euler_angles}")
-    #     lip_distance = analysis.distance_between_lips(landmarks[0])
-    #     print(f"Average distance between lips: {lip_distance}")
-    #     amnt_unrelaxed = analysis.lip_corners_relaxed(landmarks[0])
-    #     print(f"Lip corners relaxed distances - amnt_unrelaxed: {amnt_unrelaxed}")
-    #     eye_open_amount = analysis.eye_open_amnt(landmarks[0])
-    #     print(f"Average eye open amount: {eye_open_amount}")
+    # 2. Get the rotation matrix from the image
+    rot_matrix, euler_angles, landmarks = estimator.get_rotation_matrix(input_image)
+    print(f"Euler angles (pitch, yaw, roll): {euler_angles}")
+    lip_distance = analysis.distance_between_lips(landmarks[0])
+    print(f"Average distance between lips: {lip_distance}")
+    amnt_unrelaxed = analysis.lip_corners_relaxed(landmarks[0])
+    print(f"Lip corners relaxed distances - amnt_unrelaxed: {amnt_unrelaxed}")
+    eye_open_amount = analysis.eye_open_amnt(landmarks[0])
+    print(f"Average eye open amount: {eye_open_amount}")
 
     # print landmarks:
     # cv2.imwrite('landmarks_inner_center_lip.jpg', analysis.display_landmarks(input_image.copy(), landmarks[0], highlight_indices=[13, 14]))
