@@ -13,7 +13,6 @@ from third_party_helpers.access_fsrt import access_fsrt
 def make_dataset(image_list, label_list, au_relation=None, landmark_list=None, train=False):
     len_ = len(image_list)
     if au_relation is not None:
-        raise ("Not implemented for AU relation")
         images = [(image_list[i].strip(),  label_list[i, :],au_relation[i,:], landmark_list[i].strip()) for i in range(len_)]
     else:
         images = [(image_list[i].strip(),  label_list[i, :]) for i in range(len_)]
@@ -110,13 +109,9 @@ class BP4D(Dataset):
             train_landmark_list = open(train_landmark_list_path).readlines()
 
             # AU relation
-            if self._stage == 2:
-                au_relation_list_path = os.path.join(root_path, 'list', 'BP4D_train_AU_relation_fold' + str(fold) + '.txt')
-                au_relation_list = np.loadtxt(au_relation_list_path)
-                self.data_list = make_dataset(train_image_list, train_label_list, au_relation_list, train_landmark_list, train=self._train)
-            else:
-                self.data_list = make_dataset(train_image_list, train_label_list, train=self._train)
-
+            au_relation_list_path = os.path.join(root_path, 'list', 'BP4D_train_AU_relation_fold' + str(fold) + '.txt')
+            au_relation_list = np.loadtxt(au_relation_list_path)
+            self.data_list = make_dataset(train_image_list, train_label_list, au_relation_list, train_landmark_list, train=self._train)
         else:
             # img
             test_image_list_path = os.path.join(root_path, 'list', 'BP4D_test_img_path_fold' + str(fold) + '.txt')
@@ -130,40 +125,28 @@ class BP4D(Dataset):
         self.to_pil = transforms.ToPILImage()
 
     def __getitem__(self, index):
-        if self._stage == 2 and self._train:
+        if self._train:
             img, label, au_relation, landmark_path = self.data_list[index]
-            img = self.loader(os.path.join(self.img_folder_path, img))
+
+            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
             landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
-            
-            w, h = img.size
-            offset_y = random.randint(0, h - self.crop_size)
-            offset_x = random.randint(0, w - self.crop_size)
-            flip = random.randint(0, 1)
-            if self._transform is not None:
-                img = self._transform(img, flip, offset_x, offset_y)
+
             return img, label, au_relation, landmark
         else:
+            img, label = self.data_list[index]
+            img = self.loader(os.path.join(self.img_folder_path, img))
+
             if self._train:
-                img, label = self.data_list[index]
-
-                img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
-
-                return img, label
+                w, h = img.size
+                offset_y = random.randint(0, h - self.crop_size)
+                offset_x = random.randint(0, w - self.crop_size)
+                flip = random.randint(0, 1)
+                if self._transform is not None:
+                    img = self._transform(img, flip, offset_x, offset_y)
             else:
-                img, label = self.data_list[index]
-                img = self.loader(os.path.join(self.img_folder_path, img))
-
-                if self._train:
-                    w, h = img.size
-                    offset_y = random.randint(0, h - self.crop_size)
-                    offset_x = random.randint(0, w - self.crop_size)
-                    flip = random.randint(0, 1)
-                    if self._transform is not None:
-                        img = self._transform(img, flip, offset_x, offset_y)
-                else:
-                    if self._transform is not None:
-                        img = self._transform(img)
-                return img, label
+                if self._transform is not None:
+                    img = self._transform(img)
+            return img, label
 
     def __len__(self):
         return len(self.data_list)
@@ -194,12 +177,9 @@ class DISFA(Dataset):
             train_landmark_list = open(train_landmark_list_path).readlines()
 
             # AU relation
-            if self._stage == 2:
-                au_relation_list_path = os.path.join(root_path, 'list', 'DISFA_train_AU_relation_fold' + str(fold) + '.txt')
-                au_relation_list = np.loadtxt(au_relation_list_path)
-                self.data_list = make_dataset(train_image_list, train_label_list, au_relation_list, train_landmark_list, train=self._train)
-            else:
-                self.data_list = make_dataset(train_image_list, train_label_list, train=self._train)
+            au_relation_list_path = os.path.join(root_path, 'list', 'DISFA_train_AU_relation_fold' + str(fold) + '.txt')
+            au_relation_list = np.loadtxt(au_relation_list_path)
+            self.data_list = make_dataset(train_image_list, train_label_list, au_relation_list, train_landmark_list, train=self._train)
 
         else:
             # img
