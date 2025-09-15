@@ -38,6 +38,9 @@ def get_dataloader(conf):
 # Train
 def train(conf,net,train_loader,optimizer,epoch,criterion):
     losses = AverageMeter()
+    losses1 = AverageMeter()
+    losses2 = AverageMeter()
+    losses3 = AverageMeter()
     net.train()
     train_loader_len = len(train_loader)
     # all_sources = list(glob.glob("/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/*.jpg"))
@@ -50,7 +53,7 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
 
     translate_every_other = True
 
-    for batch_idx, (inputs,  targets) in enumerate(tqdm(train_loader)):
+    for batch_idx, (inputs,  targets, relations, lmk_true) in enumerate(tqdm(train_loader)):
         if translate_every_other:
             # Load source:
             source_image = resize(imageio.imread(use_sources[batch_idx]), (256, 256))[..., :3]
@@ -67,15 +70,23 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
 
         adjust_learning_rate(optimizer, epoch, conf.epochs, conf.learning_rate, batch_idx, train_loader_len)
         targets = targets.float()
+        lmk_true = lmk_true.float()
         if torch.cuda.is_available():
-            inputs, targets = inputs.cuda(), targets.cuda()
+            inputs, targets, relations, lmk_true = inputs.cuda(), targets.cuda(), relations.cuda(), lmk_true.cuda()
         optimizer.zero_grad()
-        outputs, _, _, _ = net(inputs)
-        loss = criterion(outputs, targets)
+        outputs, outputs_relation, emb_out, lmk_out = net(inputs)
+        wa_loss = criterion[0](outputs, targets)
+        edge_loss = criterion[1](outputs_relation.view(-1,4), relations.view(-1).long())
+        contrasitive_loss = criterion[2](emb_out, targets)
+        lmk_loss = criterion[3](lmk_out.float(), lmk_true)
+        loss = wa_loss + conf.lam_edge * edge_loss + conf.lam_contrasitive * contrasitive_loss + conf.lam_lmk * lmk_loss
         loss.backward()
         optimizer.step()
         losses.update(loss.data.item(), inputs.size(0))
-    return losses.avg
+        losses1.update(wa_loss.data.item(), inputs.size(0))
+        losses2.update(edge_loss.data.item(), inputs.size(0))
+        losses3.update(contrasitive_loss.data.item(), inputs.size(0))
+    return losses.avg, losses1.avg, losses2.avg, losses3.avg
 
 
 # Val
@@ -89,7 +100,7 @@ def val(net,val_loader,criterion):
             if torch.cuda.is_available():
                 inputs, targets = inputs.cuda(), targets.cuda()
             outputs, _, _, _ = net(inputs)
-            loss = criterion(outputs, targets)
+            loss = criterion[0](outputs, targets)
             losses.update(loss.data.item(), inputs.size(0))
             update_list = statistics(outputs, targets.detach(), 0.5)
             statistics_list = update_statistics_list(statistics_list, update_list)
@@ -123,7 +134,8 @@ def main(conf):
         net = nn.DataParallel(net).cuda()
         train_weight = train_weight.cuda()
 
-    criterion = WeightedAsymmetricLoss(weight=train_weight)
+    margin = 0.2
+    criterion = [WeightedAsymmetricLoss(weight=train_weight), nn.CrossEntropyLoss(),BatchContrastiveLoss(margin=margin),nn.MSELoss()]
     optimizer = optim.AdamW(net.parameters(),  betas=(0.9, 0.999), lr=conf.learning_rate, weight_decay=conf.weight_decay)
     print('the init learning rate is ', conf.learning_rate)
 
@@ -131,12 +143,12 @@ def main(conf):
     for epoch in range(start_epoch, conf.epochs):
         lr = optimizer.param_groups[0]['lr']
         logging.info("Epoch: [{} | {} LR: {} ]".format(epoch + 1, conf.epochs, lr))
-        train_loss = train(conf,net,train_loader,optimizer,epoch,criterion)
+        train_loss, wa_loss, edge_loss, lmk_loss = train(conf,net,train_loader,optimizer,epoch,criterion)
         val_loss, val_mean_f1_score, val_f1_score, val_mean_acc, val_acc = val(net, val_loader, criterion)
 
         # log
-        infostr = {'Epoch:  {}   train_loss: {:.5f}  val_loss: {:.5f}  val_mean_f1_score {:.2f},val_mean_acc {:.2f}'
-                .format(epoch + 1, train_loss, val_loss, 100.* val_mean_f1_score, 100.* val_mean_acc)}
+        infostr = {'Epoch:  {}   train_loss: {:.5f} wa_loss: {:.5f} edge_loss: {:.5f} lmk_loss: {:.5f} val_loss: {:.5f}  val_mean_f1_score {:.2f},val_mean_acc {:.2f}'
+                .format(epoch + 1, train_loss, wa_loss, edge_loss, lmk_loss, val_loss, 100.* val_mean_f1_score, 100.* val_mean_acc)}
 
         logging.info(infostr)
         infostr = {'F1-score-list:'}
