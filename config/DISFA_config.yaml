@@ -1,0 +1,3 @@
+dataset_path: /home/andreww9/fsl_groups/grp_RVL_AU/code/DISFA_LEFT_cropped_MTCNN
+num_classes: 8
+neighbor_num: 3

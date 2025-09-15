@@ -192,49 +192,28 @@ class DISFA(Dataset):
             self.data_list = make_dataset(test_image_list, test_label_list, train=self._train)
 
     def __getitem__(self, index, returnPath=False):
-        if self._stage == 2 and self._train:
+        if self._train:
             img, label, au_relation, landmark_path = self.data_list[index]
-            img = self.loader(os.path.join(self.img_folder_path, img))
+
+            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
             landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
 
-            w, h = img.size
-            if h > self.crop_size:
-                offset_y = random.randint(0, h - self.crop_size)
-            else:
-                offset_y = 0
-            if w > self.crop_size:
-                offset_x = random.randint(0, w - self.crop_size)
-            else:
-                offset_x = 0
-            flip = random.randint(0, 1)
-            if self._transform is not None:
-                img = self._transform(img, flip, offset_x, offset_y)
             return img, label, au_relation, landmark
         else:
-            img_path, label = self.data_list[index]
-            img = self.loader(os.path.join(self.img_folder_path,img_path))
+            img, label = self.data_list[index]
+            img = self.loader(os.path.join(self.img_folder_path, img))
 
             if self._train:
                 w, h = img.size
-                if h > self.crop_size:
-                    offset_y = random.randint(0, h - self.crop_size)
-                else:
-                    offset_y = 0
-                if w > self.crop_size:
-                    offset_x = random.randint(0, w - self.crop_size)
-                else:
-                    offset_x = 0
+                offset_y = random.randint(0, h - self.crop_size)
+                offset_x = random.randint(0, w - self.crop_size)
                 flip = random.randint(0, 1)
                 if self._transform is not None:
                     img = self._transform(img, flip, offset_x, offset_y)
             else:
                 if self._transform is not None:
                     img = self._transform(img)
-            
-            if returnPath:
-                return img, label, os.path.join(self.img_folder_path,img_path)
-            else:
-                return img, label
+            return img, label
 
     def __len__(self):
         return len(self.data_list)
