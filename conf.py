@@ -37,9 +37,9 @@ parser.add_argument('--arc', default='swin_transformer_base', type=str, choices=
 parser.add_argument('--metric', default="dots", type=str, choices=['dots', 'cosine', 'l1'], help="metric for graph top-K nearest neighbors selection")
 # When all losses are trained together with the same weight, these are the approximate magnitudes on the BP4D dataset:
 # main loss: ~228.0; edge loss: ~0.37; contrasitive loss: ~1.34; lmk loss: ~221.0
-parser.add_argument('--lam_edge', default=228.0/0.37*0.01, type=float, help="lambda for adjusting loss")
-parser.add_argument('--lam_contrasitive', default=228.0/1.34*0.01, type=float, help="lambda for adjusting loss")
-parser.add_argument('--lam_lmk', default=228.0/221.0*0.01, type=float, help="lambda for adjusting loss")
+parser.add_argument('--lam_edge', default=228.0/0.37*0.001, type=float, help="lambda for adjusting loss")
+parser.add_argument('--lam_contrasitive', default=228.0/1.34*0.001, type=float, help="lambda for adjusting loss")
+parser.add_argument('--lam_lmk', default=228.0/221.0*0.001, type=float, help="lambda for adjusting loss")
 parser.add_argument('-n','--numEncoderLayers', default=2, type=int, help='number of encoder layers')
 
 # Device and Seed
