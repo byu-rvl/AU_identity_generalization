@@ -103,6 +103,29 @@ def update_statistics_list(old_list, new_list):
 
     return old_list
 
+def update_statistics_list_FEC(statistics_list, outputs, label):
+    diff_first_second = torch.norm(outputs[:,0,:] - outputs[:,1,:], p=2, dim=1)
+    diff_first_third = torch.norm(outputs[:,0,:] - outputs[:,2,:], p=2, dim=1)
+    diff_second_third = torch.norm(outputs[:,1,:] - outputs[:,2,:], p=2, dim=1)
+
+    combined = torch.cat((torch.unsqueeze(diff_second_third,1), torch.unsqueeze(diff_first_third,1), torch.unsqueeze(diff_second_third,1)), 1)
+    predictions = torch.argmin(combined, 1)
+
+    # add 1 to all prediction values so indexing is the same as the labels
+    predictions += 1
+
+    correct = predictions == label
+    incorrect = ~correct
+    num_correct = torch.sum(correct, dim=0)
+    num_incorrect = torch.sum(incorrect, dim=0)
+    total = num_correct + num_incorrect
+
+    
+    if statistics_list is None:
+        statistics_list = [num_correct, num_incorrect, total]
+    else:
+        statistics_list = [statistics_list[0] + num_correct, statistics_list[1] + num_incorrect, statistics_list[2] + total]
+    return statistics_list
 
 def BP4D_infolist(list):
     infostr = {'AU1: {:.2f} AU2: {:.2f} AU4: {:.2f} AU6: {:.2f} AU7: {:.2f} AU10: {:.2f} AU12: {:.2f} AU14: {:.2f} AU15: {:.2f} AU17: {:.2f} AU23: {:.2f} AU24: {:.2f} '.format(100.*list[0],100.*list[1],100.*list[2],100.*list[3],100.*list[4],100.*list[5],100.*list[6],100.*list[7],100.*list[8],100.*list[9],100.*list[10],100.*list[11])}

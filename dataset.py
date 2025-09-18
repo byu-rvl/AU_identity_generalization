@@ -36,10 +36,10 @@ class FEC(Dataset):
         self._root_path = root_path
         self._train = train
         if train:
-            self.img_folder_path = "/home/andreww9/fsl_groups/grp_AU_storage/compute/FEC_dataset_downloader/train_images"
+            self.img_folder_path = "/home/andreww9/fsl_groups/grp_AU_storage/code/FEC_dataset_downloader/train_images"
             # self.img_folder_path = "/tmp/" + str(conf.jobID) + "/train_images"
         else:
-            self.img_folder_path = "/home/andreww9/fsl_groups/grp_AU_storage/compute/FEC_dataset_downloader/test_images"
+            self.img_folder_path = "/home/andreww9/fsl_groups/grp_AU_storage/code/FEC_dataset_downloader/test_images"
             # self.img_folder_path = "/tmp/" + str(conf.jobID) + "/test_images"
         self._transform = transform
         self.crop_size = crop_size
@@ -128,10 +128,25 @@ class BP4D(Dataset):
         if self._train:
             img, label, au_relation, landmark_path = self.data_list[index]
 
-            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
-            landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
+            # img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
+            # landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
 
-            return img, label, au_relation, landmark
+            # return img, label, au_relation, landmark
+
+            img = self.loader(os.path.join(self.img_folder_path, img))
+
+            if self._train:
+                w, h = img.size
+                offset_y = random.randint(0, h - self.crop_size)
+                offset_x = random.randint(0, w - self.crop_size)
+                flip = random.randint(0, 1)
+                if self._transform is not None:
+                    img = self._transform(img, flip, offset_x, offset_y)
+            else:
+                if self._transform is not None:
+                    img = self._transform(img)
+            # return img, label
+            return img, label, au_relation, np.load(os.path.join(self.lmk_folder_path, landmark_path))
         else:
             img, label = self.data_list[index]
             img = self.loader(os.path.join(self.img_folder_path, img))
@@ -201,6 +216,8 @@ class DISFA(Dataset):
             return img, label, au_relation, landmark
         else:
             img, label = self.data_list[index]
+            # img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
+            # return img, label
             img = self.loader(os.path.join(self.img_folder_path, img))
 
             if self._train:

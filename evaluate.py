@@ -45,8 +45,15 @@ def val(net,val_loader):
     net.eval()
     statistics_list = None
     statistics_list_overlap = None
-    for batch_idx, (inputs, targets) in enumerate(tqdm(val_loader)):
+    use_sources = "/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn/id10004_Oftn1-Z0Lbk.jpg"
+    for batch_idx, (inputs,  targets) in enumerate(tqdm(val_loader)):
         with torch.no_grad():
+            # Load source:
+            # source_image = resize(imageio.imread(use_sources), (256, 256))[..., :3]
+            # # Preprocessing:
+            # with torch.no_grad():
+            #     inputs = fsrt_model.run_fsrt_list_batch(source_image, inputs)
+
             targets = targets.float()
             if torch.cuda.is_available():
                 inputs, targets = inputs.cuda(), targets.cuda()

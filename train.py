@@ -32,8 +32,66 @@ def get_dataloader(conf):
         valset = DISFA(conf.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1)
         val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
 
+    elif conf.dataset == 'FEC':
+        trainset = FEC(conf.dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 2, conf=conf)
+        train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers, drop_last=True)
+        valset = FEC(conf.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 2, conf=conf)
+        val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
+
     return train_loader, val_loader, len(trainset), len(valset)
 
+def train_FEC(conf, net, train_loader, optimizer, epoch, criterion):
+    losses = AverageMeter()
+    losses1 = AverageMeter()
+    losses2 = AverageMeter()
+    net.train()
+    train_loader_len = len(train_loader)
+    for batch_idx, (imgs0, imgs1, imgs2, label) in enumerate(tqdm(train_loader)):
+        adjust_learning_rate(optimizer, epoch, conf.epochs, conf.learning_rate, batch_idx, train_loader_len)
+        if torch.cuda.is_available():
+            imgs0, imgs1, imgs2, label = imgs0.cuda(), imgs1.cuda(), imgs2.cuda(), label.cuda()
+        optimizer.zero_grad()
+        _, _, emb_out0, _ = net(imgs0)
+        _, _, emb_out1, _ = net(imgs1)
+        _, _, emb_out2, _ = net(imgs2)
+        emb_out0 = emb_out0.unsqueeze(1)
+        emb_out1 = emb_out1.unsqueeze(1)
+        emb_out2 = emb_out2.unsqueeze(1)
+        outputs = torch.cat((emb_out0, emb_out1, emb_out2), 1)
+        # print("shapes: ", outputs.shape, label.shape, emb_out0.shape, emb_out1.shape, emb_out2.shape)
+        loss = criterion[0](outputs, label)
+        loss.backward()
+        optimizer.step()
+        losses.update(loss.data.item(), outputs.size(0))
+
+    return losses.avg
+
+
+def val_FEC(net, val_loader, criterion):
+    losses = AverageMeter()
+    net.eval()
+    statistics_list = None
+    losses = AverageMeter()
+    for batch_idx, (imgs0, imgs1, imgs2, label) in enumerate(tqdm(val_loader)):
+        with torch.no_grad():
+            if torch.cuda.is_available():
+                imgs0, imgs1, imgs2, label = imgs0.cuda(), imgs1.cuda(), imgs2.cuda(), label.cuda()
+
+            _, _, emb_out0, _ = net(imgs0)
+            _, _, emb_out1, _ = net(imgs1)
+            _, _, emb_out2, _ = net(imgs2)
+            emb_out0 = emb_out0.unsqueeze(1)
+            emb_out1 = emb_out1.unsqueeze(1)
+            emb_out2 = emb_out2.unsqueeze(1)
+            outputs = torch.cat((emb_out0, emb_out1, emb_out2), 1)
+            loss = criterion[0](outputs, label)
+            statistics_list = update_statistics_list_FEC(statistics_list, outputs, label)
+            losses.update(loss.data.item(), outputs.size(0))
+    num_correct = statistics_list[0]
+    num_incorrect = statistics_list[1]
+    total = statistics_list[2]
+    mean_acc = num_correct / total
+    return losses.avg, mean_acc
 
 # Train
 def train(conf,net,train_loader,optimizer,epoch,criterion):
@@ -44,14 +102,14 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
     net.train()
     train_loader_len = len(train_loader)
     # all_sources = list(glob.glob("/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/*.jpg"))
-    all_sources = list(glob.glob("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn/*.jpg"))
+    all_sources = list(glob.glob("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_new/*.jpg"))
     np.random.shuffle(all_sources)
     use_sources = []
     while len(use_sources) < train_loader_len:
         use_sources += all_sources
     use_sources = use_sources[:train_loader_len]
 
-    translate_every_other = True
+    translate_every_other = False
 
     for batch_idx, (inputs,  targets, relations, lmk_true) in enumerate(tqdm(train_loader)):
         if translate_every_other:
@@ -61,12 +119,12 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
             with torch.no_grad():
                 inputs = fsrt_model.run_fsrt_list_batch(source_image, inputs)
             translate_every_other = False
-        else:
-            translate_every_other = True
-            inputs = inputs.permute(0, 3, 1, 2)
-            inputs = fsrt_model.resize_transform(inputs)
-            # Make inputs a float tensor
-            inputs = inputs.float()
+        # else:
+        #     # translate_every_other = True
+        #     inputs = inputs.permute(0, 3, 1, 2)
+        #     inputs = fsrt_model.resize_transform(inputs)
+        #     # Make inputs a float tensor
+        #     inputs = inputs.float()
 
         adjust_learning_rate(optimizer, epoch, conf.epochs, conf.learning_rate, batch_idx, train_loader_len)
         targets = targets.float()
@@ -116,11 +174,16 @@ def main(conf):
     elif conf.dataset == 'DISFA':
         dataset_info = DISFA_infolist
         numberLmks=66
+    elif conf.dataset == "FEC":
+        dataset_info = FEC_infolist
+        # numberLmks=49
+        numberLmks=66
 
     start_epoch = 0
     # data
     train_loader,val_loader,train_data_num,val_data_num = get_dataloader(conf)
-    train_weight = torch.from_numpy(np.loadtxt(os.path.join(conf.dataset_path, 'list', conf.dataset+'_weight_fold'+str(conf.fold)+'.txt')))
+    if conf.dataset != "FEC":
+        train_weight = torch.from_numpy(np.loadtxt(os.path.join(conf.dataset_path, 'list', conf.dataset+'_weight_fold'+str(conf.fold)+'.txt')))
 
     logging.info("Fold: [{} | {}  val_data_num: {} ]".format(conf.fold, conf.N_fold, val_data_num))
 
@@ -132,10 +195,14 @@ def main(conf):
 
     if torch.cuda.is_available():
         net = nn.DataParallel(net).cuda()
-        train_weight = train_weight.cuda()
+        if conf.dataset != "FEC":
+            train_weight = train_weight.cuda()
 
     margin = 0.2
-    criterion = [WeightedAsymmetricLoss(weight=train_weight), nn.CrossEntropyLoss(),BatchContrastiveLoss(margin=margin),nn.MSELoss()]
+    if conf.dataset == "FEC":
+        criterion = [TripleContrasitiveLoss(margin=margin)]
+    else:
+        criterion = [WeightedAsymmetricLoss(weight=train_weight), nn.CrossEntropyLoss(),BatchContrastiveLoss(margin=margin),nn.MSELoss()]
     optimizer = optim.AdamW(net.parameters(),  betas=(0.9, 0.999), lr=conf.learning_rate, weight_decay=conf.weight_decay)
     print('the init learning rate is ', conf.learning_rate)
 
@@ -143,22 +210,29 @@ def main(conf):
     for epoch in range(start_epoch, conf.epochs):
         lr = optimizer.param_groups[0]['lr']
         logging.info("Epoch: [{} | {} LR: {} ]".format(epoch + 1, conf.epochs, lr))
-        train_loss, wa_loss, edge_loss, lmk_loss = train(conf,net,train_loader,optimizer,epoch,criterion)
-        val_loss, val_mean_f1_score, val_f1_score, val_mean_acc, val_acc = val(net, val_loader, criterion)
+        if conf.dataset == "FEC":
+            train_loss = train_FEC(conf,net,train_loader,optimizer,epoch,criterion)
+            val_loss, val_mean_acc = val_FEC(net, val_loader, criterion)
+            infostr = {'Epoch:  {}   train_loss: {:.5f} val_loss: {:.5f}  val_mean_acc {:.2f}'
+                    .format(epoch + 1, train_loss, val_loss, 100.* val_mean_acc)}
+            logging.info(infostr)
+        else:
+            train_loss, wa_loss, edge_loss, lmk_loss = train(conf,net,train_loader,optimizer,epoch,criterion)
+            val_loss, val_mean_f1_score, val_f1_score, val_mean_acc, val_acc = val(net, val_loader, criterion)
 
-        # log
-        infostr = {'Epoch:  {}   train_loss: {:.5f} wa_loss: {:.5f} edge_loss: {:.5f} lmk_loss: {:.5f} val_loss: {:.5f}  val_mean_f1_score {:.2f},val_mean_acc {:.2f}'
-                .format(epoch + 1, train_loss, wa_loss, edge_loss, lmk_loss, val_loss, 100.* val_mean_f1_score, 100.* val_mean_acc)}
+            # log
+            infostr = {'Epoch:  {}   train_loss: {:.5f} wa_loss: {:.5f} edge_loss: {:.5f} lmk_loss: {:.5f} val_loss: {:.5f}  val_mean_f1_score {:.2f},val_mean_acc {:.2f}'
+                    .format(epoch + 1, train_loss, wa_loss, edge_loss, lmk_loss, val_loss, 100.* val_mean_f1_score, 100.* val_mean_acc)}
 
-        logging.info(infostr)
-        infostr = {'F1-score-list:'}
-        logging.info(infostr)
-        infostr = dataset_info(val_f1_score)
-        logging.info(infostr)
-        infostr = {'Acc-list:'}
-        logging.info(infostr)
-        infostr = dataset_info(val_acc)
-        logging.info(infostr)
+            logging.info(infostr)
+            infostr = {'F1-score-list:'}
+            logging.info(infostr)
+            infostr = dataset_info(val_f1_score)
+            logging.info(infostr)
+            infostr = {'Acc-list:'}
+            logging.info(infostr)
+            infostr = dataset_info(val_acc)
+            logging.info(infostr)
 
         # save checkpoints
         if (epoch+1) % 1 == 0:

@@ -202,6 +202,48 @@ class find_static_faces:
 
         return average_eye_distance
 
+    def get_num_pixels_high(self, landmarks, frame_height):
+        head_size = self.get_head_size(landmarks)
+        if head_size > 0:
+            return head_size * frame_height
+        return 0
+
+    def get_face_center(self, landmarks, frame_width, frame_height):
+        x_coords = [landmark.x * frame_width for landmark in landmarks]
+        y_coords = [landmark.y * frame_height for landmark in landmarks]
+        center_x = int(np.mean(x_coords))
+        center_y = int(np.mean(y_coords))
+        return (center_x, center_y)
+
+    def passes_constraints(self, euler_angles, lip_distance, amnt_unrelaxed, eye_open_amount, num_pixels_high):
+        # Define thresholds for constraints
+        max_roll = 15.0  # degrees
+        max_pitch = 15.0  # degrees
+        max_yaw = 15.0  # degrees
+        max_lip_distance = 0.10  # normalized units
+        max_amnt_unrelaxed = 0.05  # normalized units
+        min_eye_open_amount = 0.02  # normalized units
+        min_num_pixels_high = 150  # pixels
+
+        pitch, yaw, roll = euler_angles
+
+        if abs(roll) > max_roll:
+            return "Fail max roll"
+        if abs(pitch) > max_pitch:
+            return "Fail max pitch"
+        if abs(yaw) > max_yaw:
+            return "Fail max yaw"
+        if lip_distance > max_lip_distance:
+            return "Fail max lip distance"
+        if amnt_unrelaxed > max_amnt_unrelaxed:
+            return "Fail max amnt unrelaxed"
+        if eye_open_amount < min_eye_open_amount:
+            return "Fail min eye open amount"
+        if num_pixels_high < min_num_pixels_high:
+            return "Fail min num pixels high"
+
+        return 0
+
     def find_best_frame_list(self, list_of_frames, frame_names = []):
         '''Rank each of them with lowest number being best, then add 
         them. The one with the lowest number wins. If there is a tie, 
@@ -210,6 +252,7 @@ class find_static_faces:
         '''
 
         results = {}
+        fail_constraints = {}
         all_rolls = []
         all_pitches = []
         all_yaws = []
@@ -228,6 +271,7 @@ class find_static_faces:
             rot_matrix, all_euler_angles, landmarks = estimator.get_rotation_matrix(frame)
             if not landmarks:
                 continue
+            frame_height, frame_width = frame.shape[0], frame.shape[1]
             
             for i, (landmark, euler_angles) in enumerate(zip(landmarks, all_euler_angles)):
                 if len(landmark) == 0:
@@ -235,20 +279,40 @@ class find_static_faces:
                 lip_distance = self.distance_between_lips(landmark)
                 amnt_unrelaxed = self.lip_corners_relaxed(landmark)
                 eye_open_amount = self.eye_open_amnt(landmark)
-                all_lip_distances.append(lip_distance)
-                all_amnt_unrelaxed.append(amnt_unrelaxed)
-                all_eye_open_amounts.append(eye_open_amount)
-                all_rolls.append(abs(euler_angles[2]))
-                all_pitches.append(abs(euler_angles[0]))
-                all_yaws.append(abs(euler_angles[1]))
+                num_pixels_high = self.get_num_pixels_high(landmark, frame_height)
+                pass_constraints = self.passes_constraints(euler_angles, lip_distance, amnt_unrelaxed, eye_open_amount, num_pixels_high)
 
-                results[f'{frame_name} face{i}_of_{len(landmarks)}'] = (indx, lip_distance, amnt_unrelaxed, eye_open_amount, euler_angles)
+                if pass_constraints == 0:
+                    all_lip_distances.append(lip_distance)
+                    all_amnt_unrelaxed.append(amnt_unrelaxed)
+                    all_eye_open_amounts.append(eye_open_amount)
+                    all_rolls.append(abs(euler_angles[2]))
+                    all_pitches.append(abs(euler_angles[0]))
+                    all_yaws.append(abs(euler_angles[1]))
+
+                    results[f'{frame_name} face{i}_of_{len(landmarks)}'] = (indx, lip_distance, amnt_unrelaxed, eye_open_amount, euler_angles, self.get_face_center(landmark, frame_width, frame_height), num_pixels_high)
+                else:
+                    if pass_constraints not in fail_constraints:
+                        fail_constraints[pass_constraints] = 0
+                    fail_constraints[pass_constraints] += 1
 
             success_frame_cntr += 1
         estimator.close()
+        print("Statistical summary for all successfully processed frames:")
+        if len(all_lip_distances) > 0:
+            print("Lip distances: min {:.4f}, max {:.4f}, mean {:.4f}, std {:.4f}".format(np.min(all_lip_distances), np.max(all_lip_distances), np.mean(all_lip_distances), np.std(all_lip_distances)))
+            print("Amount unrelaxed: min {:.4f}, max {:.4f}, mean {:.4f}, std {:.4f}".format(np.min(all_amnt_unrelaxed), np.max(all_amnt_unrelaxed), np.mean(all_amnt_unrelaxed), np.std(all_amnt_unrelaxed)))
+            print("Eye open amounts: min {:.4f}, max {:.4f}, mean {:.4f}, std {:.4f}".format(np.min(all_eye_open_amounts), np.max(all_eye_open_amounts), np.mean(all_eye_open_amounts), np.std(all_eye_open_amounts)))
+            print("Rolls: min {:.4f}, max {:.4f}, mean {:.4f}, std {:.4f}".format(np.min(all_rolls), np.max(all_rolls), np.mean(all_rolls), np.std(all_rolls)))
+            print("Pitches: min {:.4f}, max {:.4f}, mean {:.4f}, std {:.4f}".format(np.min(all_pitches), np.max(all_pitches), np.mean(all_pitches), np.std(all_pitches)))
+            print("Yaws: min {:.4f}, max {:.4f}, mean {:.4f}, std {:.4f}".format(np.min(all_yaws), np.max(all_yaws), np.mean(all_yaws), np.std(all_yaws)))
+
+        print("Failed constraints summary:")
+        for key in fail_constraints:
+            print(f"Failed constraint {key}: {fail_constraints[key]} times")
 
         if len(all_lip_distances) == 0:
-            return []
+            return [], None
         
         all_lip_distances = np.array(all_lip_distances)
         all_amnt_unrelaxed = np.array(all_amnt_unrelaxed)
@@ -269,6 +333,7 @@ class find_static_faces:
         best_frame_name = list(results.keys())[best_index]
         best_metrics = results[best_frame_name]
         best_frame_return = list_of_frames[best_metrics[0]]
+        frame_center = best_metrics[5]
 
         # print("Best frame:", best_frame_name)
         # print("Metrics (lip_distance, amnt_unrelaxed, eye_open_amount):", best_metrics)
@@ -286,85 +351,92 @@ class find_static_faces:
 
         # print("Successfully processed frames percentage:", (success_frame_cntr / len(frame_names)) * 100, len(frame_names), success_frame_cntr)
         
-        return best_frame_return
+        print("best_metrics[-1]", best_metrics[-1])
+        print("best_metrics", best_metrics)
+        print("frame_center", frame_center)
+        return best_frame_return, frame_center
         
 
 if __name__ == '__main__':
-    # argsparser = argparse.ArgumentParser()
-    # argsparser.add_argument('--id', type=str, help='Identity to process', required=True, default=None)
-    # args = argsparser.parse_args()
-    # id_to_process = args.id
+    argsparser = argparse.ArgumentParser()
+    argsparser.add_argument('--id', type=str, help='Identity to process', required=True, default=None)
+    args = argsparser.parse_args()
+    id_to_process = args.id
 
-    # vox_celeb1_dir = "/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train/"
+    vox_celeb1_dir = "/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train/"
     # vox_celeb1_dir_best_frames = "/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames/"
+    vox_celeb1_dir_best_frames = "/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames_new/"
 
-    # analysis = find_static_faces()
-    
-    # all_options = list(glob.glob(vox_celeb1_dir + "/" + id_to_process + "/*/"))
-    # all_options.sort()
-    # for option in all_options:
-    #     all_videos = list(glob.glob(option + "**/*.mp4"))
-    #     all_videos.sort()
-    #     all_frames = []
-    #     all_frame_names = []
-    #     for video in all_videos:
-    #         video_name = video.split("/")[-1].replace(".mp4", "")
-    #         cap = cv2.VideoCapture(video)
-    #         frame_cntr = 0
-    #         success = True
-    #         while success:
-    #             success, frame = cap.read()
-    #             if success:
-    #                 all_frames.append(frame)
-    #                 all_frame_names.append(f"{video_name}_frame{frame_cntr}")
-    #                 frame_cntr += 1
-    #         cap.release()
-    #     if len(all_frames) == 0:
-    #         continue
-        
-    #     best_frame = analysis.find_best_frame_list(all_frames, all_frame_names)
-    #     saveHere = Path(vox_celeb1_dir_best_frames) / (id_to_process + "_" + Path(option).name + ".jpg")
-    #     if len(best_frame) == 0:
-    #         print("No best frame found for:", id_to_process, option)
-    #         continue
-    #     print("Saving to:", saveHere)
-    #     saveHere.parent.mkdir(parents=True, exist_ok=True)
-    #     cv2.imwrite(str(saveHere), best_frame)
-
-
-
-
-    # Make sure you have an image file named 'face_image.jpg' in the same directory,
-    # or change the path to your image file.
-    # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00019_frame.jpg'
-    # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00026_frame.jpg'
-    # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00078_frame.jpg'
-    # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00188_frame.jpg'
-    image_path = '/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames/id10009_seo9TTTEoE4.jpg'
-    
-    
-    input_image = cv2.imread(image_path)
-    if input_image is None:
-        raise FileNotFoundError(f"Image not found at path: {image_path}")
-
-    # 1. Initialize
-    estimator = MediaPipeFaceRotationEstimator()
     analysis = find_static_faces()
+    
+    all_options = list(glob.glob(vox_celeb1_dir + "/" + id_to_process + "/*/"))
+    all_options.sort()
+    for option in all_options:
+        all_videos = list(glob.glob(option + "**/*.mp4"))
+        all_videos.sort()
+        all_frames = []
+        all_frame_names = []
+        for video in all_videos:
+            video_name = video.split("/")[-1].replace(".mp4", "")
+            cap = cv2.VideoCapture(video)
+            frame_cntr = 0
+            success = True
+            while success:
+                success, frame = cap.read()
+                if success:
+                    all_frames.append(frame)
+                    all_frame_names.append(f"{video_name}_frame{frame_cntr}")
+                    frame_cntr += 1
+            cap.release()
+        if len(all_frames) == 0:
+            continue
+        
+        best_frame, face_center = analysis.find_best_frame_list(all_frames, all_frame_names)
+        saveHere = Path(vox_celeb1_dir_best_frames) / (id_to_process + "_" + Path(option).name + ".jpg")
+        saveHere_face_center = Path(vox_celeb1_dir_best_frames) / (id_to_process + "_" + Path(option).name + "_face_center.npy")
+        if len(best_frame) == 0:
+            print("No best frame found for:", id_to_process, option)
+            continue
+        print("Saving to:", saveHere)
+        saveHere.parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(saveHere), best_frame)
 
-    # 3. Clean up
-    estimator.close()
+        np.save(str(saveHere_face_center), np.array(face_center))
 
-    # 4. Find important information from landmarks
-    # if landmarks:
-    # 2. Get the rotation matrix from the image
-    rot_matrix, euler_angles, landmarks = estimator.get_rotation_matrix(input_image)
-    print(f"Euler angles (pitch, yaw, roll): {euler_angles}")
-    lip_distance = analysis.distance_between_lips(landmarks[0])
-    print(f"Average distance between lips: {lip_distance}")
-    amnt_unrelaxed = analysis.lip_corners_relaxed(landmarks[0])
-    print(f"Lip corners relaxed distances - amnt_unrelaxed: {amnt_unrelaxed}")
-    eye_open_amount = analysis.eye_open_amnt(landmarks[0])
-    print(f"Average eye open amount: {eye_open_amount}")
+
+
+
+    # # Make sure you have an image file named 'face_image.jpg' in the same directory,
+    # # or change the path to your image file.
+    # # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00019_frame.jpg'
+    # # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00026_frame.jpg'
+    # # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00078_frame.jpg'
+    # # image_path = '/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/id00188_frame.jpg'
+    # image_path = '/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames/id10009_seo9TTTEoE4.jpg'
+    
+    
+    # input_image = cv2.imread(image_path)
+    # if input_image is None:
+    #     raise FileNotFoundError(f"Image not found at path: {image_path}")
+
+    # # 1. Initialize
+    # estimator = MediaPipeFaceRotationEstimator()
+    # analysis = find_static_faces()
+
+    # # 3. Clean up
+    # estimator.close()
+
+    # # 4. Find important information from landmarks
+    # # if landmarks:
+    # # 2. Get the rotation matrix from the image
+    # rot_matrix, euler_angles, landmarks = estimator.get_rotation_matrix(input_image)
+    # print(f"Euler angles (pitch, yaw, roll): {euler_angles}")
+    # lip_distance = analysis.distance_between_lips(landmarks[0])
+    # print(f"Average distance between lips: {lip_distance}")
+    # amnt_unrelaxed = analysis.lip_corners_relaxed(landmarks[0])
+    # print(f"Lip corners relaxed distances - amnt_unrelaxed: {amnt_unrelaxed}")
+    # eye_open_amount = analysis.eye_open_amnt(landmarks[0])
+    # print(f"Average eye open amount: {eye_open_amount}")
 
     # print landmarks:
     # cv2.imwrite('landmarks_inner_center_lip.jpg', analysis.display_landmarks(input_image.copy(), landmarks[0], highlight_indices=[13, 14]))

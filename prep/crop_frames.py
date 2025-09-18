@@ -99,8 +99,10 @@ def preprocess(img, bbox=None, landmark=None, **kwargs):
 
 if __name__ == "__main__":
 
-    all_images = list(glob.glob("/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames/*.jpg"))
-    save_path = Path("/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn/")
+    # all_images = list(glob.glob("/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames/id10001*.jpg"))
+    all_images = list(glob.glob("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_new/*.jpg"))
+    # save_path = Path("/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_test/")
+    save_path = Path("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_new/")
     save_path.mkdir(parents=True, exist_ok=True)
 
     detector = MTCNN(device="CPU:0")
@@ -110,16 +112,26 @@ if __name__ == "__main__":
         # Load an image
         image = load_image(image_path)
 
+        # Load face center
+        face_center = np.load(image_path.replace('.jpg', '_face_center.npy'))
+
         # Detect faces in the image
-        result = detector.detect_faces(image)[0]
+        result = detector.detect_faces(image)
 
-        keypoints_dict = result["keypoints"]
-        keypoints = np.array([[keypoints_dict["left_eye"][0], keypoints_dict["left_eye"][1]],
-                              [keypoints_dict["right_eye"][0], keypoints_dict["right_eye"][1]],
-                              [keypoints_dict["nose"][0], keypoints_dict["nose"][1]],
-                              [keypoints_dict["mouth_left"][0], keypoints_dict["mouth_left"][1]],
-                              [keypoints_dict["mouth_right"][0], keypoints_dict["mouth_right"][1]]])
-        face = preprocess(image, result["box"], keypoints, image_size="224")
+        for i in range(len(result)):
+            # See if the face center is within the bounding box
+            box = result[i]['box']  # [x, y, width, height]
+            if face_center[0] < box[0] or face_center[0] > box[0] + box[2] or face_center[1] < box[1] or face_center[1] > box[1] + box[3]:
+                continue
 
-        save_name = save_path / Path(image_path).name
-        cv2.imwrite(str(save_name), cv2.cvtColor(face, cv2.COLOR_RGB2BGR))
+
+            keypoints_dict = result[i]["keypoints"]
+            keypoints = np.array([[keypoints_dict["left_eye"][0], keypoints_dict["left_eye"][1]],
+                                [keypoints_dict["right_eye"][0], keypoints_dict["right_eye"][1]],
+                                [keypoints_dict["nose"][0], keypoints_dict["nose"][1]],
+                                [keypoints_dict["mouth_left"][0], keypoints_dict["mouth_left"][1]],
+                                [keypoints_dict["mouth_right"][0], keypoints_dict["mouth_right"][1]]])
+            face = preprocess(image, result[i]["box"], keypoints, image_size="224")
+
+            save_name = save_path / Path(image_path).name
+            cv2.imwrite(str(save_name), cv2.cvtColor(face, cv2.COLOR_RGB2BGR))
