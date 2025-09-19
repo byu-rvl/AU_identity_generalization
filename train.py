@@ -14,10 +14,6 @@ from dataset import *
 from utils import *
 from conf import get_config,set_logger,set_outdir,set_env
 
-from third_party_helpers.access_fsrt import access_fsrt
-
-fsrt_model = access_fsrt()
-
 def get_dataloader(conf):
     print('==> Preparing data...')
     if conf.dataset == 'BP4D':
@@ -101,31 +97,10 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
     losses3 = AverageMeter()
     net.train()
     train_loader_len = len(train_loader)
-    # all_sources = list(glob.glob("/home/andreww9/groups/grp_face_race/code/vox_celeb_identities/*.jpg"))
-    all_sources = list(glob.glob("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_new/*.jpg"))
-    np.random.shuffle(all_sources)
-    use_sources = []
-    while len(use_sources) < train_loader_len:
-        use_sources += all_sources
-    use_sources = use_sources[:train_loader_len]
 
     translate_every_other = False
 
     for batch_idx, (inputs,  targets, relations, lmk_true) in enumerate(tqdm(train_loader)):
-        if translate_every_other:
-            # Load source:
-            source_image = resize(imageio.imread(use_sources[batch_idx]), (256, 256))[..., :3]
-            # Preprocessing:
-            with torch.no_grad():
-                inputs = fsrt_model.run_fsrt_list_batch(source_image, inputs)
-            translate_every_other = False
-        # else:
-        #     # translate_every_other = True
-        #     inputs = inputs.permute(0, 3, 1, 2)
-        #     inputs = fsrt_model.resize_transform(inputs)
-        #     # Make inputs a float tensor
-        #     inputs = inputs.float()
-
         adjust_learning_rate(optimizer, epoch, conf.epochs, conf.learning_rate, batch_idx, train_loader_len)
         targets = targets.float()
         lmk_true = lmk_true.float()

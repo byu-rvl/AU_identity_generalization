@@ -1,3 +1,4 @@
+import glob
 import imageio
 from skimage.transform import resize
 import numpy as np
@@ -6,6 +7,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 import os
+import torch
 
 from third_party_helpers.access_fsrt import access_fsrt
 
@@ -28,7 +30,19 @@ def pil_loader(path):
 def default_loader(path):
     return pil_loader(path)
 
-
+class RunFRST:
+    def __init__(self):
+        self.fsrt_model = access_fsrt()
+        self.to_pil = transforms.ToPILImage()
+        self.all_sources = list(glob.glob("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_new/*.jpg"))
+    
+    def run_fsrt(self, target_image, index):
+        if index > len(self.all_sources) - 1:
+            index = index % len(self.all_sources)
+        source_image = resize(imageio.imread(self.all_sources[index]), (256, 256))[..., :3] #TODO: change to random source
+        with torch.no_grad():
+            output = self.fsrt_model.run_fsrt_list(np.array([source_image]), [target_image])
+        return output
 
 class FEC(Dataset):
     def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader, conf=None):
@@ -121,46 +135,41 @@ class BP4D(Dataset):
             test_label_list_path = os.path.join(root_path, 'list', 'BP4D_test_label_fold' + str(fold) + '.txt')
             test_label_list = np.loadtxt(test_label_list_path)
             self.data_list = make_dataset(test_image_list, test_label_list, train=self._train)
-        self.fsrt_model = access_fsrt()
         self.to_pil = transforms.ToPILImage()
+        self.preprocessing = None
+        self.proportion_with_frst = 0.5
 
     def __getitem__(self, index):
         if self._train:
             img, label, au_relation, landmark_path = self.data_list[index]
 
-            # img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
-            # landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
-
-            # return img, label, au_relation, landmark
-
-            img = self.loader(os.path.join(self.img_folder_path, img))
-
-            if self._train:
+            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
+            if self.preprocessing is None:
+                self.preprocessing = RunFRST()
+            if random.random() < self.proportion_with_frst:
+                img = self.preprocessing.run_fsrt(img, index)[0]
+                img = np.transpose(img, (2, 0, 1))
+            img = self.to_pil(img)
+            # Save image for debugging
+            # img.save(f"debug/debug_img_{index}.jpg")
+            if self._transform is not None: 
                 w, h = img.size
                 offset_y = random.randint(0, h - self.crop_size)
                 offset_x = random.randint(0, w - self.crop_size)
                 flip = random.randint(0, 1)
-                if self._transform is not None:
-                    img = self._transform(img, flip, offset_x, offset_y)
-            else:
-                if self._transform is not None:
-                    img = self._transform(img)
-            # return img, label
-            return img, label, au_relation, np.load(os.path.join(self.lmk_folder_path, landmark_path))
+                img = self._transform(img, flip, offset_x, offset_y)
+            
+            landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
+
+            return img, label, au_relation, landmark
         else:
             img, label = self.data_list[index]
-            img = self.loader(os.path.join(self.img_folder_path, img))
+            
+            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
 
-            if self._train:
-                w, h = img.size
-                offset_y = random.randint(0, h - self.crop_size)
-                offset_x = random.randint(0, w - self.crop_size)
-                flip = random.randint(0, 1)
-                if self._transform is not None:
-                    img = self._transform(img, flip, offset_x, offset_y)
-            else:
-                if self._transform is not None:
-                    img = self._transform(img)
+            img = self.to_pil(img)
+            if self._transform is not None:
+                img = self._transform(img)
             return img, label
 
     def __len__(self):
@@ -205,40 +214,41 @@ class DISFA(Dataset):
             test_label_list_path = os.path.join(root_path, 'list', 'DISFA_test_label_fold' + str(fold) + '.txt')
             test_label_list = np.loadtxt(test_label_list_path)
             self.data_list = make_dataset(test_image_list, test_label_list, train=self._train)
+        self.to_pil = transforms.ToPILImage()
+        self.preprocessing = None
+        self.proportion_with_frst = 0.5
 
-    def __getitem__(self, index, returnPath=False):
+    def __getitem__(self, index):
         if self._train:
             img, label, au_relation, landmark_path = self.data_list[index]
 
-            # img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
-            landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
-            img = self.loader(os.path.join(self.img_folder_path, img))
-
-            if self._train:
+            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
+            if self.preprocessing is None:
+                self.preprocessing = RunFRST()
+            if random.random() < self.proportion_with_frst:
+                img = self.preprocessing.run_fsrt(img, index)[0]
+                img = np.transpose(img, (2, 0, 1))
+            img = self.to_pil(img)
+            # Save image for debugging
+            # img.save(f"debug/debug_img_{index}.jpg")
+            if self._transform is not None: 
                 w, h = img.size
                 offset_y = random.randint(0, h - self.crop_size)
                 offset_x = random.randint(0, w - self.crop_size)
                 flip = random.randint(0, 1)
-                if self._transform is not None:
-                    img = self._transform(img, flip, offset_x, offset_y)
+                img = self._transform(img, flip, offset_x, offset_y)
+            
+            landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
 
             return img, label, au_relation, landmark
         else:
             img, label = self.data_list[index]
-            # img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
-            # return img, label
-            img = self.loader(os.path.join(self.img_folder_path, img))
+            
+            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
 
-            if self._train:
-                w, h = img.size
-                offset_y = random.randint(0, h - self.crop_size)
-                offset_x = random.randint(0, w - self.crop_size)
-                flip = random.randint(0, 1)
-                if self._transform is not None:
-                    img = self._transform(img, flip, offset_x, offset_y)
-            else:
-                if self._transform is not None:
-                    img = self._transform(img)
+            img = self.to_pil(img)
+            if self._transform is not None:
+                img = self._transform(img)
             return img, label
 
     def __len__(self):
