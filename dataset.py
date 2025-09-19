@@ -210,8 +210,17 @@ class DISFA(Dataset):
         if self._train:
             img, label, au_relation, landmark_path = self.data_list[index]
 
-            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
+            # img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
             landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
+            img = self.loader(os.path.join(self.img_folder_path, img))
+
+            if self._train:
+                w, h = img.size
+                offset_y = random.randint(0, h - self.crop_size)
+                offset_x = random.randint(0, w - self.crop_size)
+                flip = random.randint(0, 1)
+                if self._transform is not None:
+                    img = self._transform(img, flip, offset_x, offset_y)
 
             return img, label, au_relation, landmark
         else:
