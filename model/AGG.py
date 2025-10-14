@@ -3,23 +3,19 @@ from .basic_block import *
 
 
 class AGG(nn.Module):
-    def __init__(self, num_classes, in_channels, secondDimensionSize, numEncoderLayers):
+    def __init__(self, num_classes, in_channels, secondDimensionSize, numEncoderLayers, head_embedding_dim):
         super(AGG, self).__init__()
         self.num_classes = num_classes
         self.in_channels = in_channels
 
-        self.decrease_dim = PositionalBlock(in_channels*secondDimensionSize, self.in_channels*2)
+        self.numberHeads = self.num_classes + self.num_classes * self.num_classes
 
-        positional_encoding = []
-        numberHeads = self.num_classes + self.num_classes * self.num_classes
-        for i in range(numberHeads):
-            positional_encode_layer = PositionalBlock(self.in_channels*2, self.in_channels)
-            positional_encoding += [positional_encode_layer]
+        self.change_dimension = PositionalBlock(in_channels, self.numberHeads * head_embedding_dim)
 
-        self.positional_encoding = nn.ModuleList(positional_encoding)
+        self.head_embedder = nn.Embedding(self.numberHeads, head_embedding_dim)
 
-        encoder_layer = nn.TransformerEncoderLayer(d_model=in_channels, nhead=int(self.num_classes))
+        encoder_layer = nn.TransformerEncoderLayer(d_model=head_embedding_dim, nhead=int(self.num_classes))
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=numEncoderLayers)
 
     def getAGG(self):
-        return self.decrease_dim, self.positional_encoding, self.transformer_encoder
+        return self.change_dimension, self.head_embedder, self.transformer_encoder, self.numberHeads

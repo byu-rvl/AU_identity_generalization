@@ -11,7 +11,7 @@ import imageio
 import yaml
 from easydict import EasyDict as edict
 
-from model.encoder_gcn import MEFARG
+from model.cross_dataset_AU import cross_dataset_AU
 from dataset import *
 from utils import *
 from conf import get_config,set_logger,set_outdir,set_env
@@ -53,7 +53,7 @@ def val(net,val_loader):
             targets = targets.float()
             if torch.cuda.is_available():
                 inputs, targets = inputs.cuda(), targets.cuda()
-            outputs, _, _, _ = net(inputs)
+            outputs = net(inputs)
             
             # BP4D AUs are 1, 2, 4, 6, 7, 10, 12, 14, 15, 17, 23, 24
             # DISFA AUs are 1, 2, 4, 6, 9, 12, 25, 26
@@ -108,7 +108,7 @@ def main(conf):
 
     logging.info("Fold: [{} | {}  val_data_num: {} ]".format(conf.fold, conf.N_fold, val_data_num))
 
-    net = MEFARG(num_classes=conf.num_classes, backbone=conf.arc, numEncoderLayers=conf.numEncoderLayers, numLandmarks=numberLmks)
+    net = cross_dataset_AU(num_classes=conf.num_classes) #, backbone=conf.arc, numEncoderLayers=conf.numEncoderLayers, numLandmarks=numberLmks)
     # resume
     if conf.resume != '':
         logging.info("Resume form | {} ]".format(conf.resume))

@@ -367,9 +367,18 @@ if __name__ == '__main__':
     # vox_celeb1_dir_best_frames = "/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames/"
     vox_celeb1_dir_best_frames = "/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames_new/"
 
+    vox_celeb2_dir = "/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_train/"
+    vox_celeb2_dir_best_frames = "/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_train_best_frames/"
+
+    # vox_celeb_to_process_dir = vox_celeb1_dir
+    # vox_celeb_to_process_dir_best_frames = vox_celeb1_dir_best_frames
+
+    vox_celeb_to_process_dir = vox_celeb2_dir
+    vox_celeb_to_process_dir_best_frames = vox_celeb2_dir_best_frames
+
     analysis = find_static_faces()
     
-    all_options = list(glob.glob(vox_celeb1_dir + "/" + id_to_process + "/*/"))
+    all_options = list(glob.glob(vox_celeb_to_process_dir + "/" + id_to_process + "/*/"))
     all_options.sort()
     for option in all_options:
         all_videos = list(glob.glob(option + "**/*.mp4"))
@@ -392,8 +401,8 @@ if __name__ == '__main__':
             continue
         
         best_frame, face_center = analysis.find_best_frame_list(all_frames, all_frame_names)
-        saveHere = Path(vox_celeb1_dir_best_frames) / (id_to_process + "_" + Path(option).name + ".jpg")
-        saveHere_face_center = Path(vox_celeb1_dir_best_frames) / (id_to_process + "_" + Path(option).name + "_face_center.npy")
+        saveHere = Path(vox_celeb_to_process_dir_best_frames) / (id_to_process + "_" + Path(option).name + ".jpg")
+        saveHere_face_center = Path(vox_celeb_to_process_dir_best_frames) / (id_to_process + "_" + Path(option).name + "_face_center.npy")
         if len(best_frame) == 0:
             print("No best frame found for:", id_to_process, option)
             continue

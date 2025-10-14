@@ -1,3 +1,4 @@
+import cv2
 import glob
 import imageio
 from skimage.transform import resize
@@ -34,15 +35,37 @@ class RunFRST:
     def __init__(self):
         self.fsrt_model = access_fsrt()
         self.to_pil = transforms.ToPILImage()
-        self.all_sources = list(glob.glob("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_new/*.jpg"))
+        # self.all_sources = list(glob.glob("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_new/*.jpg"))
+        # self.all_sources = ["/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_new/id10019_KPM7HF0Xc18.jpg"]
+        self.all_sources = list(glob.glob("/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_train_best_frames_mtcnn_new/*.jpg"))
+        # Shuffle the source images to ensure variety
+        random.shuffle(self.all_sources)
     
     def run_fsrt(self, target_image, index):
         if index > len(self.all_sources) - 1:
             index = index % len(self.all_sources)
-        source_image = resize(imageio.imread(self.all_sources[index]), (256, 256))[..., :3] #TODO: change to random source
+        source_image = resize(imageio.imread(self.all_sources[index]), (256, 256))[..., :3]
         with torch.no_grad():
             output = self.fsrt_model.run_fsrt_list(np.array([source_image]), [target_image])
         return output
+
+class RunCLAHE:
+    def __init__(self):
+        self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    
+    def run_clahe(self, target_image):
+        # Ensure the image is in uint8 format
+        target_image = (target_image * 255).astype(np.uint8)
+        
+        lab = cv2.cvtColor(target_image, cv2.COLOR_RGB2LAB)
+        l, a, b = cv2.split(lab)
+        cl = self.clahe.apply(l)
+        limg = cv2.merge((cl,a,b))
+        final = cv2.cvtColor(limg, cv2.COLOR_LAB2RGB)
+
+        # Normalize to [0, 1]
+        final = final.astype(np.float32) / 255.0
+        return final
 
 class FEC(Dataset):
     def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader, conf=None):
@@ -98,7 +121,7 @@ class FEC(Dataset):
         return len(self.allInfo_images)
 
 class BP4D(Dataset):
-    def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader):
+    def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader, conf=None):
 
         assert fold>0 and fold <=3, 'The fold num must be restricted from 1 to 3'
         assert stage>0 and stage <=2, 'The stage num must be restricted from 1 to 2'
@@ -137,18 +160,22 @@ class BP4D(Dataset):
             self.data_list = make_dataset(test_image_list, test_label_list, train=self._train)
         self.to_pil = transforms.ToPILImage()
         self.preprocessing = None
-        self.proportion_with_frst = 0.5
+        self.proportion_with_frst = conf.proportion_with_frst
+        self.clahe_processor = None
 
     def __getitem__(self, index):
         if self._train:
             img, label, au_relation, landmark_path = self.data_list[index]
 
             img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
-            if self.preprocessing is None:
+            if self.clahe_processor is None:
+                self.clahe_processor = RunCLAHE()
+            if self.preprocessing is None and self.proportion_with_frst > 0.0:
                 self.preprocessing = RunFRST()
+            img = self.clahe_processor.run_clahe(img)
             if random.random() < self.proportion_with_frst:
                 img = self.preprocessing.run_fsrt(img, index)[0]
-                img = np.transpose(img, (2, 0, 1))
+                img = self.clahe_processor.run_clahe(img.numpy())
             img = self.to_pil(img)
             # Save image for debugging
             # img.save(f"debug/debug_img_{index}.jpg")
@@ -167,6 +194,15 @@ class BP4D(Dataset):
             
             img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
 
+            if self.clahe_processor is None:
+                self.clahe_processor = RunCLAHE()
+            img = self.clahe_processor.run_clahe(img)
+
+            # if self.preprocessing is None:
+            #     self.preprocessing = RunFRST()
+            # img = self.preprocessing.run_fsrt(img, index)[0]
+            # img = self.clahe_processor.run_clahe(img.numpy())
+
             img = self.to_pil(img)
             if self._transform is not None:
                 img = self._transform(img)
@@ -177,7 +213,7 @@ class BP4D(Dataset):
 
 
 class DISFA(Dataset):
-    def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader):
+    def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader, conf=None):
 
         assert fold>0 and fold <=3, 'The fold num must be restricted from 1 to 3'
         assert stage>0 and stage <=2, 'The stage num must be restricted from 1 to 2'
@@ -216,18 +252,22 @@ class DISFA(Dataset):
             self.data_list = make_dataset(test_image_list, test_label_list, train=self._train)
         self.to_pil = transforms.ToPILImage()
         self.preprocessing = None
-        self.proportion_with_frst = 0.5
+        self.proportion_with_frst = conf.proportion_with_frst
+        self.clahe_processor = None
 
     def __getitem__(self, index):
         if self._train:
             img, label, au_relation, landmark_path = self.data_list[index]
 
             img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
-            if self.preprocessing is None:
+            if self.clahe_processor is None:
+                self.clahe_processor = RunCLAHE()
+            if self.preprocessing is None and self.proportion_with_frst > 0.0:
                 self.preprocessing = RunFRST()
+            img = self.clahe_processor.run_clahe(img)
             if random.random() < self.proportion_with_frst:
                 img = self.preprocessing.run_fsrt(img, index)[0]
-                img = np.transpose(img, (2, 0, 1))
+                img = self.clahe_processor.run_clahe(img.numpy())
             img = self.to_pil(img)
             # Save image for debugging
             # img.save(f"debug/debug_img_{index}.jpg")
@@ -245,6 +285,15 @@ class DISFA(Dataset):
             img, label = self.data_list[index]
             
             img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
+
+            if self.clahe_processor is None:
+                self.clahe_processor = RunCLAHE()
+            img = self.clahe_processor.run_clahe(img)
+
+            # if self.preprocessing is None:
+            #     self.preprocessing = RunFRST()
+            # img = self.preprocessing.run_fsrt(img, index)[0]
+            # img = self.clahe_processor.run_clahe(img.numpy())
 
             img = self.to_pil(img)
             if self._transform is not None:

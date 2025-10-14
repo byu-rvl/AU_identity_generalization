@@ -146,15 +146,17 @@ class Head(nn.Module):
         self.in_channels = in_channels
         self.num_classes = num_classes
         self.numLandmarks = numLandmarks
+        # head_embedding_dim = 48 # A small dimension for the head embedding. Divisible by num_classes for BP4D (12) and DISFA (8)
+        head_embedding_dim = num_classes
 
         # AGG module:
-        self.decrease_dim, self.positional_encoding, self.transformer_encoder = AGG(num_classes, in_channels, secondDimensionSize, numEncoderLayers).getAGG()
+        self.change_dimension, self.positional_encoding, self.transformer_encoder, self.numberHeads = AGG(num_classes, in_channels, secondDimensionSize, numEncoderLayers, head_embedding_dim).getAGG()
 
         # GNN module:
-        self.gnn = GNN(self.in_channels, self.num_classes)
+        self.gnn = GNN(head_embedding_dim, self.num_classes)
 
         # COAL module:
-        self.sc, self.edge_fc, self.relu, self.emb_layer, self.lmk_layer1, self.lmk_layer2 = COAL(num_classes, in_channels, numLandmarks).getInfo()
+        self.sc, self.edge_fc, self.relu, self.emb_layer, self.lmk_layer1, self.lmk_layer2 = COAL(num_classes, head_embedding_dim, numLandmarks).getInfo()
 
         nn.init.xavier_uniform_(self.edge_fc.weight)
         nn.init.xavier_uniform_(self.sc)
@@ -162,12 +164,27 @@ class Head(nn.Module):
     def forward(self, x):
 
         #flatten x so that it keeps the first dimension, but the rest of it is flattened
-        x_flat = x.flatten(start_dim=1)
-        x_flat = self.decrease_dim(x_flat)
-        token_positions = []
-        for i, layer in enumerate(self.positional_encoding):
-            token_positions.append(layer(x_flat).unsqueeze(1))
-        token_positions = torch.cat(token_positions, dim=1)
+        # x_flat = x.flatten(start_dim=1)
+        # Average pool x across the second dimension
+        x_flat = torch.mean(x, dim=1)
+        
+        x_flat = self.change_dimension(x_flat)
+        # [B, numberHeads * head_embedding_dim]
+        
+
+        # Reshape x_flat to be [B, numberHeads, head_embedding_dim]
+        x_flat = x_flat.view(-1, self.numberHeads, x_flat.shape[-1] // self.numberHeads)
+        
+
+        # Add the head embeddings to the input
+        head_indices = torch.arange(self.numberHeads, device=x.device).expand(x_flat.size(0), -1)
+        head_embeddings = self.positional_encoding(head_indices)
+        
+        # Add the positional encoding: 
+        token_positions = x_flat + head_embeddings
+        
+        # Normalize the token positions
+        token_positions = F.normalize(token_positions, p=2, dim=-1)
 
         #make an encoder to pass the token_positions through
         token_positions = self.transformer_encoder(token_positions)

@@ -99,10 +99,12 @@ def preprocess(img, bbox=None, landmark=None, **kwargs):
 
 if __name__ == "__main__":
 
-    # all_images = list(glob.glob("/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames/id10001*.jpg"))
-    all_images = list(glob.glob("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_new/*.jpg"))
-    # save_path = Path("/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_test/")
-    save_path = Path("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_new/")
+    # # all_images = list(glob.glob("/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames/id10001*.jpg"))
+    # all_images = list(glob.glob("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_new/*.jpg"))
+    # # save_path = Path("/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_test/")
+    # save_path = Path("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_new/")
+    all_images = list(glob.glob("/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_train_best_frames/*.jpg"))
+    save_path = Path("/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_train_best_frames_mtcnn_new/")
     save_path.mkdir(parents=True, exist_ok=True)
 
     detector = MTCNN(device="CPU:0")

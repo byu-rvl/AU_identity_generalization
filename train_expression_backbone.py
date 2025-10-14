@@ -9,7 +9,7 @@ import logging
 import glob
 import imageio
 
-from model.encoder_gcn import MEFARG
+from model.cross_dataset_AU import cross_dataset_AU
 from dataset import *
 from utils import *
 from conf import get_config,set_logger,set_outdir,set_env
@@ -98,8 +98,6 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
     net.train()
     train_loader_len = len(train_loader)
 
-    translate_every_other = False
-
     for batch_idx, (inputs,  targets, relations, lmk_true) in enumerate(tqdm(train_loader)):
         adjust_learning_rate(optimizer, epoch, conf.epochs, conf.learning_rate, batch_idx, train_loader_len)
         targets = targets.float()
@@ -107,19 +105,22 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
         if torch.cuda.is_available():
             inputs, targets, relations, lmk_true = inputs.cuda(), targets.cuda(), relations.cuda(), lmk_true.cuda()
         optimizer.zero_grad()
-        outputs, outputs_relation, emb_out, lmk_out = net(inputs)
-        wa_loss = criterion[0](outputs, targets)
-        edge_loss = criterion[1](outputs_relation.view(-1,4), relations.view(-1).long())
-        contrasitive_loss = criterion[2](emb_out, targets)
-        lmk_loss = criterion[3](lmk_out.float(), lmk_true)
-        loss = wa_loss + conf.lam_edge * edge_loss + conf.lam_contrasitive * contrasitive_loss + conf.lam_lmk * lmk_loss
+        # outputs, outputs_relation, emb_out, lmk_out = net(inputs)
+        outputs = net(inputs)
+        loss = criterion[0](outputs, targets)
+        # wa_loss = criterion[0](outputs, targets)
+        # edge_loss = criterion[1](outputs_relation.view(-1,4), relations.view(-1).long())
+        # contrasitive_loss = criterion[2](emb_out, targets)
+        # lmk_loss = criterion[3](lmk_out.float(), lmk_true)
+        # loss = wa_loss + conf.lam_edge * edge_loss + conf.lam_contrasitive * contrasitive_loss + conf.lam_lmk * lmk_loss
         loss.backward()
         optimizer.step()
         losses.update(loss.data.item(), inputs.size(0))
-        losses1.update(wa_loss.data.item(), inputs.size(0))
-        losses2.update(edge_loss.data.item(), inputs.size(0))
-        losses3.update(contrasitive_loss.data.item(), inputs.size(0))
-    return losses.avg, losses1.avg, losses2.avg, losses3.avg
+        # losses1.update(wa_loss.data.item(), inputs.size(0))
+        # losses2.update(edge_loss.data.item(), inputs.size(0))
+        # losses3.update(contrasitive_loss.data.item(), inputs.size(0))
+    # return losses.avg, losses1.avg, losses2.avg, losses3.avg
+    return losses.avg, 0, 0, 0
 
 
 # Val
@@ -132,7 +133,7 @@ def val(net,val_loader,criterion):
             targets = targets.float()
             if torch.cuda.is_available():
                 inputs, targets = inputs.cuda(), targets.cuda()
-            outputs, _, _, _ = net(inputs)
+            outputs = net(inputs)
             loss = criterion[0](outputs, targets)
             losses.update(loss.data.item(), inputs.size(0))
             update_list = statistics(outputs, targets.detach(), 0.5)
@@ -162,7 +163,7 @@ def main(conf):
 
     logging.info("Fold: [{} | {}  val_data_num: {} ]".format(conf.fold, conf.N_fold, val_data_num))
 
-    net = MEFARG(num_classes=conf.num_classes, backbone=conf.arc, numEncoderLayers=conf.numEncoderLayers, numLandmarks=numberLmks)
+    net = cross_dataset_AU(num_classes=conf.num_classes) #, backbone=conf.arc, numEncoderLayers=conf.numEncoderLayers, numLandmarks=numberLmks)
     # resume
     if conf.resume != '':
         logging.info("Resume form | {} ]".format(conf.resume))
