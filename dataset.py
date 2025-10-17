@@ -161,21 +161,30 @@ class BP4D(Dataset):
         self.to_pil = transforms.ToPILImage()
         self.preprocessing = None
         self.proportion_with_frst = conf.proportion_with_frst
-        self.clahe_processor = None
+        if conf.do_clahe:
+            self.do_clahe = True
+            self.clahe_processor = None
+        else:
+            self.do_clahe = False
 
     def __getitem__(self, index):
         if self._train:
             img, label, au_relation, landmark_path = self.data_list[index]
 
             img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
-            if self.clahe_processor is None:
+            if self.do_clahe and self.clahe_processor is None:
                 self.clahe_processor = RunCLAHE()
             if self.preprocessing is None and self.proportion_with_frst > 0.0:
                 self.preprocessing = RunFRST()
-            img = self.clahe_processor.run_clahe(img)
+            if self.do_clahe:
+                img = self.clahe_processor.run_clahe(img)
             if random.random() < self.proportion_with_frst:
                 img = self.preprocessing.run_fsrt(img, index)[0]
-                img = self.clahe_processor.run_clahe(img.numpy())
+                if self.do_clahe:
+                    img = self.clahe_processor.run_clahe(img.numpy())
+                else:
+                    # When I don't have the run_clahe, I need to reshape to C, H, W
+                    img = np.transpose(img, (2, 0, 1))
             img = self.to_pil(img)
             # Save image for debugging
             # img.save(f"debug/debug_img_{index}.jpg")
@@ -194,9 +203,10 @@ class BP4D(Dataset):
             
             img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
 
-            if self.clahe_processor is None:
+            if self.do_clahe and self.clahe_processor is None:
                 self.clahe_processor = RunCLAHE()
-            img = self.clahe_processor.run_clahe(img)
+            if self.do_clahe:
+                img = self.clahe_processor.run_clahe(img)
 
             # if self.preprocessing is None:
             #     self.preprocessing = RunFRST()
@@ -253,21 +263,30 @@ class DISFA(Dataset):
         self.to_pil = transforms.ToPILImage()
         self.preprocessing = None
         self.proportion_with_frst = conf.proportion_with_frst
-        self.clahe_processor = None
-
+        if conf.do_clahe:
+            self.do_clahe = True
+            self.clahe_processor = None
+        else:
+            self.do_clahe = False
+            
     def __getitem__(self, index):
         if self._train:
             img, label, au_relation, landmark_path = self.data_list[index]
 
             img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
-            if self.clahe_processor is None:
+            if self.do_clahe and self.clahe_processor is None:
                 self.clahe_processor = RunCLAHE()
             if self.preprocessing is None and self.proportion_with_frst > 0.0:
                 self.preprocessing = RunFRST()
-            img = self.clahe_processor.run_clahe(img)
+            if self.do_clahe:
+                img = self.clahe_processor.run_clahe(img)
             if random.random() < self.proportion_with_frst:
                 img = self.preprocessing.run_fsrt(img, index)[0]
-                img = self.clahe_processor.run_clahe(img.numpy())
+                if self.do_clahe:
+                    img = self.clahe_processor.run_clahe(img.numpy())
+                else:
+                    # When I don't have the run_clahe, I need to reshape to C, H, W
+                    img = np.transpose(img, (2, 0, 1))
             img = self.to_pil(img)
             # Save image for debugging
             # img.save(f"debug/debug_img_{index}.jpg")
@@ -286,14 +305,16 @@ class DISFA(Dataset):
             
             img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
 
-            if self.clahe_processor is None:
+            if self.do_clahe and self.clahe_processor is None:
                 self.clahe_processor = RunCLAHE()
-            img = self.clahe_processor.run_clahe(img)
+            if self.do_clahe:
+                img = self.clahe_processor.run_clahe(img)
 
             # if self.preprocessing is None:
             #     self.preprocessing = RunFRST()
             # img = self.preprocessing.run_fsrt(img, index)[0]
-            # img = self.clahe_processor.run_clahe(img.numpy())
+            # if self.do_clahe:
+            #     img = self.clahe_processor.run_clahe(img.numpy())
 
             img = self.to_pil(img)
             if self._transform is not None:
