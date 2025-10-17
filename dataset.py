@@ -32,12 +32,15 @@ def default_loader(path):
     return pil_loader(path)
 
 class RunFRST:
-    def __init__(self):
-        self.fsrt_model = access_fsrt()
+    def __init__(self, conf):
+        self.fsrt_model = access_fsrt(conf)
         self.to_pil = transforms.ToPILImage()
-        # self.all_sources = list(glob.glob("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_new/*.jpg"))
-        # self.all_sources = ["/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_new/id10019_KPM7HF0Xc18.jpg"]
-        self.all_sources = list(glob.glob("/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_train_best_frames_mtcnn_new/*.jpg"))
+        if conf.fsrt_vox == 1:
+            self.all_sources = list(glob.glob("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_new/*.jpg"))
+        elif conf.fsrt_vox == 2:
+            self.all_sources = list(glob.glob("/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_train_best_frames_mtcnn_new/*.jpg"))
+        else:
+            raise Exception("fsrt_vox must be 1 or 2")
         # Shuffle the source images to ensure variety
         random.shuffle(self.all_sources)
     
@@ -166,6 +169,7 @@ class BP4D(Dataset):
             self.clahe_processor = None
         else:
             self.do_clahe = False
+        self.conf = conf
 
     def __getitem__(self, index):
         if self._train:
@@ -175,7 +179,7 @@ class BP4D(Dataset):
             if self.do_clahe and self.clahe_processor is None:
                 self.clahe_processor = RunCLAHE()
             if self.preprocessing is None and self.proportion_with_frst > 0.0:
-                self.preprocessing = RunFRST()
+                self.preprocessing = RunFRST(self.conf)
             if self.do_clahe:
                 img = self.clahe_processor.run_clahe(img)
             if random.random() < self.proportion_with_frst:
@@ -209,7 +213,7 @@ class BP4D(Dataset):
                 img = self.clahe_processor.run_clahe(img)
 
             # if self.preprocessing is None:
-            #     self.preprocessing = RunFRST()
+            #     self.preprocessing = RunFRST(self.conf)
             # img = self.preprocessing.run_fsrt(img, index)[0]
             # img = self.clahe_processor.run_clahe(img.numpy())
 
@@ -268,6 +272,7 @@ class DISFA(Dataset):
             self.clahe_processor = None
         else:
             self.do_clahe = False
+        self.conf = conf
             
     def __getitem__(self, index):
         if self._train:
@@ -277,7 +282,7 @@ class DISFA(Dataset):
             if self.do_clahe and self.clahe_processor is None:
                 self.clahe_processor = RunCLAHE()
             if self.preprocessing is None and self.proportion_with_frst > 0.0:
-                self.preprocessing = RunFRST()
+                self.preprocessing = RunFRST(self.conf)
             if self.do_clahe:
                 img = self.clahe_processor.run_clahe(img)
             if random.random() < self.proportion_with_frst:
@@ -311,7 +316,7 @@ class DISFA(Dataset):
                 img = self.clahe_processor.run_clahe(img)
 
             # if self.preprocessing is None:
-            #     self.preprocessing = RunFRST()
+            #     self.preprocessing = RunFRST(self.conf)
             # img = self.preprocessing.run_fsrt(img, index)[0]
             # if self.do_clahe:
             #     img = self.clahe_processor.run_clahe(img.numpy())

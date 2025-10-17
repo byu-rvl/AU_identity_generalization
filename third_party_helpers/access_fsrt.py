@@ -23,12 +23,16 @@ from srt.model import FSRT
 from demo import extract_keypoints_and_expression, normalize_kp, forward_model
 
 class access_fsrt:
-    def __init__(self):
+    def __init__(self, conf):
         kp_weights_path = "weights/kp_detector.pt"
-        # cfg_path = "third_party/fsrt/runs/vox256/vox256.yaml"
-        # checkpoint_weights_path = "weights/vox256.pt"
-        cfg_path = "third_party/fsrt/runs/vox256_2Source/vox256_2Source.yaml"
-        checkpoint_weights_path = "weights/vox256_2Source.pt"
+        if conf.fsrt_vox == 1:
+            cfg_path = "third_party/fsrt/runs/vox256/vox256.yaml"
+            checkpoint_weights_path = "weights/vox256.pt"
+        elif conf.fsrt_vox == 2:
+            cfg_path = "third_party/fsrt/runs/vox256_2Source/vox256_2Source.yaml"
+            checkpoint_weights_path = "weights/vox256_2Source.pt"
+        else:
+            raise Exception("fsrt_vox must be 1 or 2")
         self.relative = True
         self.adapt_scale = True
         self.max_num_pixels = 65536
