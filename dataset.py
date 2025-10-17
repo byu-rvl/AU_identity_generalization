@@ -212,10 +212,14 @@ class BP4D(Dataset):
             if self.do_clahe:
                 img = self.clahe_processor.run_clahe(img)
 
-            # if self.preprocessing is None:
-            #     self.preprocessing = RunFRST(self.conf)
-            # img = self.preprocessing.run_fsrt(img, index)[0]
-            # img = self.clahe_processor.run_clahe(img.numpy())
+            if self.conf.eval_fsrt and self.proportion_with_frst > 0.0:
+                if self.preprocessing is None:
+                    self.preprocessing = RunFRST(self.conf)
+                img = self.preprocessing.run_fsrt(img, index)[0]
+                if self.do_clahe:
+                    img = self.clahe_processor.run_clahe(img.numpy())
+                else:
+                    img = np.transpose(img, (2, 0, 1))
 
             img = self.to_pil(img)
             if self._transform is not None:
@@ -315,11 +319,14 @@ class DISFA(Dataset):
             if self.do_clahe:
                 img = self.clahe_processor.run_clahe(img)
 
-            # if self.preprocessing is None:
-            #     self.preprocessing = RunFRST(self.conf)
-            # img = self.preprocessing.run_fsrt(img, index)[0]
-            # if self.do_clahe:
-            #     img = self.clahe_processor.run_clahe(img.numpy())
+            if self.conf.eval_fsrt and self.proportion_with_frst > 0.0:
+                if self.preprocessing is None:
+                    self.preprocessing = RunFRST(self.conf)
+                img = self.preprocessing.run_fsrt(img, index)[0]
+                if self.do_clahe:
+                    img = self.clahe_processor.run_clahe(img.numpy())
+                else:
+                    img = np.transpose(img, (2, 0, 1))
 
             img = self.to_pil(img)
             if self._transform is not None:

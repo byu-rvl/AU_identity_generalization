@@ -55,6 +55,7 @@ parser.add_argument('--doEnsemble', default='False', type=str, help='Whether to 
 parser.add_argument('--proportion_with_frst', default=0.5, type=float, help='Proportion of samples in each batch that contain FRST augmentations')
 parser.add_argument('--do_clahe', action='store_true', help='Apply CLAHE to images')
 parser.add_argument('--fsrt_vox', default=2, type=int, help='1: use Voxceleb1 for FRST source images; 2: use Voxceleb2 for FRST source images')
+parser.add_argument('--eval_fsrt', action='store_true', help='Whether to apply FRST during evaluation')
 
 
 # ------------------------------
