@@ -25,7 +25,7 @@ class AGG(nn.Module):
 
 class AGG_fast(nn.Module):
     def __init__(self, num_classes, in_channels, secondDimensionSize, numEncoderLayers, head_embedding_dim):
-        super(AGG, self).__init__()
+        super(AGG_fast, self).__init__()
         self.num_classes = num_classes
         self.in_channels = in_channels
 
