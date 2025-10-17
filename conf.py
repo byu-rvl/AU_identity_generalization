@@ -53,7 +53,7 @@ parser.add_argument('--resume', default='', type=str, metavar='path', help='path
 parser.add_argument('--resume2', default='', type=str, metavar='path', help='path to latest checkpoint (default: none)')
 parser.add_argument('--doEnsemble', default='False', type=str, help='Whether to do ensemble')
 parser.add_argument('--proportion_with_frst', default=0.5, type=float, help='Proportion of samples in each batch that contain FRST augmentations')
-parser.add_argument('--do_clahe', default='False', type=str, help='Whether to do CLAHE')
+parser.add_argument('--do_clahe', action='store_true', help='Apply CLAHE to images')
 
 
 # ------------------------------
