@@ -56,7 +56,7 @@ parser.add_argument('--proportion_with_frst', default=0.5, type=float, help='Pro
 parser.add_argument('--do_clahe', action='store_true', help='Apply CLAHE to images')
 parser.add_argument('--fsrt_vox', default=2, type=int, help='1: use Voxceleb1 for FRST source images; 2: use Voxceleb2 for FRST source images')
 parser.add_argument('--eval_fsrt', action='store_true', help='Whether to apply FRST during evaluation')
-
+parser.add_argument('--agg', default='fast', type=str, choices=['fast', 'original'], help="type of AGG module to use")
 
 # ------------------------------
 
