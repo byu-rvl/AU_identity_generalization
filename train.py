@@ -34,6 +34,25 @@ def get_dataloader(conf):
         valset = FEC(conf.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 2, conf=conf)
         val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
 
+    # elif conf.dataset == 'Both':
+    #     with open('config/BP4D_config.yaml', 'r') as f:
+    #         datasets_cfg = yaml.safe_load(f)
+    #         datasets_cfg = edict(datasets_cfg)
+    #     trainset_BP4D = BP4D(datasets_cfg.dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf)
+    #     valset_BP4D = BP4D(datasets_cfg.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
+    #     val_loader_BP4D = DataLoader(valset_BP4D, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
+
+    #     with open('config/DISFA_config.yaml', 'r') as f:
+    #         datasets_cfg = yaml.safe_load(f)
+    #         datasets_cfg = edict(datasets_cfg)
+    #     trainset_DISFA = DISFA(datasets_cfg.dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf)
+    #     valset_DISFA = DISFA(datasets_cfg.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
+    #     val_loader_DISFA = DataLoader(valset_DISFA, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
+
+    #     trainset = torch.utils.data.ConcatDataset([trainset_BP4D, trainset_DISFA])
+    #     train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers)
+    #     val_loader = [val_loader_BP4D, val_loader_DISFA]
+
     return train_loader, val_loader, len(trainset), len(valset)
 
 def train_FEC(conf, net, train_loader, optimizer, epoch, criterion):
