@@ -126,7 +126,7 @@ class FEC(Dataset):
 class BP4D(Dataset):
     def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader, conf=None):
 
-        assert fold>0 and fold <=3, 'The fold num must be restricted from 1 to 3'
+        assert (fold>0 and fold <=3) or (fold == -1), 'The fold num must be restricted from 1 to 3'
         assert stage>0 and stage <=2, 'The stage num must be restricted from 1 to 2'
         self._root_path = root_path
         self._train = train
@@ -152,6 +152,18 @@ class BP4D(Dataset):
             au_relation_list_path = os.path.join(root_path, 'list', 'BP4D_train_AU_relation_fold' + str(fold) + '.txt')
             au_relation_list = np.loadtxt(au_relation_list_path)
             self.data_list = make_dataset(train_image_list, train_label_list, au_relation_list, train_landmark_list, train=self._train)
+        elif fold == -1:
+            all_data_list = []
+            for f in range(1,4):
+                # img
+                test_image_list_path = os.path.join(root_path, 'list', 'BP4D_test_img_path_fold' + str(f) + '.txt')
+                test_image_list = open(test_image_list_path).readlines()
+
+                # img labels
+                test_label_list_path = os.path.join(root_path, 'list', 'BP4D_test_label_fold' + str(f) + '.txt')
+                test_label_list = np.loadtxt(test_label_list_path)
+                all_data_list.extend(make_dataset(test_image_list, test_label_list, train=self._train))
+            self.data_list = all_data_list
         else:
             # img
             test_image_list_path = os.path.join(root_path, 'list', 'BP4D_test_img_path_fold' + str(fold) + '.txt')
