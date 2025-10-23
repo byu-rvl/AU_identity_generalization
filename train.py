@@ -34,24 +34,21 @@ def get_dataloader(conf):
         valset = FEC(conf.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 2, conf=conf)
         val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
 
-    # elif conf.dataset == 'Both':
-    #     with open('config/BP4D_config.yaml', 'r') as f:
-    #         datasets_cfg = yaml.safe_load(f)
-    #         datasets_cfg = edict(datasets_cfg)
-    #     trainset_BP4D = BP4D(datasets_cfg.dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf)
-    #     valset_BP4D = BP4D(datasets_cfg.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
-    #     val_loader_BP4D = DataLoader(valset_BP4D, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
-
-    #     with open('config/DISFA_config.yaml', 'r') as f:
-    #         datasets_cfg = yaml.safe_load(f)
-    #         datasets_cfg = edict(datasets_cfg)
-    #     trainset_DISFA = DISFA(datasets_cfg.dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf)
-    #     valset_DISFA = DISFA(datasets_cfg.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
-    #     val_loader_DISFA = DataLoader(valset_DISFA, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
-
-    #     trainset = torch.utils.data.ConcatDataset([trainset_BP4D, trainset_DISFA])
-    #     train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers)
-    #     val_loader = [val_loader_BP4D, val_loader_DISFA]
+    elif conf.dataset == 'both':
+        bp4d_trainset = BothDatasets(do_dataset="bp4d", root_path_bp4d=conf.bp4d_dataset_path, root_path_disfa=conf.disfa_dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf)
+        bp4d_trainloader = DataLoader(bp4d_trainset, batch_size=conf.batch_size//2, shuffle=True, num_workers=conf.num_workers)
+        disfa_trainset = BothDatasets(do_dataset="disfa", root_path_bp4d=conf.bp4d_dataset_path, root_path_disfa=conf.disfa_dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf)
+        disfa_trainloader = DataLoader(disfa_trainset, batch_size=conf.batch_size//2, shuffle=True, num_workers=conf.num_workers)
+        train_loader = CombinedDataLoader(bp4d_trainloader, disfa_trainloader)
+        # train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers)
+        bp4d_valset = BothDatasets(do_dataset="bp4d", root_path_bp4d=conf.bp4d_dataset_path, root_path_disfa=conf.disfa_dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
+        disfa_valset = BothDatasets(do_dataset="disfa", root_path_bp4d=conf.bp4d_dataset_path, root_path_disfa=conf.disfa_dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
+        bp4d_valloader = DataLoader(bp4d_valset, batch_size=conf.batch_size//2, shuffle=False, num_workers=conf.num_workers)
+        disfa_valloader = DataLoader(disfa_valset, batch_size=conf.batch_size//2, shuffle=False, num_workers=conf.num_workers)
+        val_loader = CombinedDataLoader(bp4d_valloader, disfa_valloader)
+        # val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
+        trainset = bp4d_trainset + disfa_trainset
+        valset = bp4d_valset + disfa_valset
 
     return train_loader, val_loader, len(trainset), len(valset)
 
@@ -119,7 +116,10 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
 
     translate_every_other = False
 
-    for batch_idx, (inputs,  targets, relations, lmk_true) in enumerate(tqdm(train_loader)):
+    for batch_idx, data in enumerate(tqdm(train_loader)):
+        if conf.dataset == "both":
+            data, dataset_flags = data    
+        inputs,  targets, relations, lmk_true = data
         adjust_learning_rate(optimizer, epoch, conf.epochs, conf.learning_rate, batch_idx, train_loader_len)
         targets = targets.float()
         lmk_true = lmk_true.float()
@@ -127,17 +127,27 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
             inputs, targets, relations, lmk_true = inputs.cuda(), targets.cuda(), relations.cuda(), lmk_true.cuda()
         optimizer.zero_grad()
         outputs, outputs_relation, emb_out, lmk_out = net(inputs)
-        wa_loss = criterion[0](outputs, targets)
-        edge_loss = criterion[1](outputs_relation.view(-1,4), relations.view(-1).long())
-        contrasitive_loss = criterion[2](emb_out, targets)
-        lmk_loss = criterion[3](lmk_out.float(), lmk_true)
-        loss = wa_loss + conf.lam_edge * edge_loss + conf.lam_contrasitive * contrasitive_loss + conf.lam_lmk * lmk_loss
+        if conf.dataset == "both" and dataset_flags == "bp4d":
+            loss = criterion[0]["bp4d"](outputs, targets)
+        elif conf.dataset == "both" and dataset_flags == "disfa":
+            loss = criterion[0]["disfa"](outputs, targets)
+        else:
+            wa_loss = criterion[0](outputs, targets)
+            edge_loss = criterion[1](outputs_relation.view(-1,4), relations.view(-1).long())
+            contrasitive_loss = criterion[2](emb_out, targets)
+            lmk_loss = criterion[3](lmk_out.float(), lmk_true)
+            loss = wa_loss + conf.lam_edge * edge_loss + conf.lam_contrasitive * contrasitive_loss + conf.lam_lmk * lmk_loss
         loss.backward()
         optimizer.step()
         losses.update(loss.data.item(), inputs.size(0))
-        losses1.update(wa_loss.data.item(), inputs.size(0))
-        losses2.update(edge_loss.data.item(), inputs.size(0))
-        losses3.update(contrasitive_loss.data.item(), inputs.size(0))
+        if conf.dataset != "both":
+            losses1.update(wa_loss.data.item(), inputs.size(0))
+            losses2.update(edge_loss.data.item(), inputs.size(0))
+            losses3.update(contrasitive_loss.data.item(), inputs.size(0))
+        else:
+            losses1.update(0.0, inputs.size(0))
+            losses2.update(0.0, inputs.size(0))
+            losses3.update(0.0, inputs.size(0))
     return losses.avg, losses1.avg, losses2.avg, losses3.avg
 
 
@@ -146,13 +156,21 @@ def val(net,val_loader,criterion):
     losses = AverageMeter()
     net.eval()
     statistics_list = None
-    for batch_idx, (inputs, targets) in enumerate(tqdm(val_loader)):
+    for batch_idx, data in enumerate(tqdm(val_loader)):
         with torch.no_grad():
+            if conf.dataset == "both":
+                data, dataset_flags = data
+            inputs, targets = data
             targets = targets.float()
             if torch.cuda.is_available():
                 inputs, targets = inputs.cuda(), targets.cuda()
             outputs, _, _, _ = net(inputs)
-            loss = criterion[0](outputs, targets)
+            if conf.dataset == "both" and dataset_flags == "bp4d":
+                loss = criterion[0]["bp4d"](outputs, targets)
+            elif conf.dataset == "both" and dataset_flags == "disfa":
+                loss = criterion[0]["disfa"](outputs, targets)
+            else:
+                loss = criterion[0](outputs, targets)
             losses.update(loss.data.item(), inputs.size(0))
             update_list = statistics(outputs, targets.detach(), 0.5)
             statistics_list = update_statistics_list(statistics_list, update_list)
@@ -172,12 +190,19 @@ def main(conf):
         dataset_info = FEC_infolist
         # numberLmks=49
         numberLmks=66
+    elif conf.dataset == 'both':
+        dataset_info = None
+        numberLmks=66 #TODO: if I use landmarks, I will need to update this.
 
     start_epoch = 0
     # data
     train_loader,val_loader,train_data_num,val_data_num = get_dataloader(conf)
     if conf.dataset != "FEC":
-        train_weight = torch.from_numpy(np.loadtxt(os.path.join(conf.dataset_path, 'list', conf.dataset+'_weight_fold'+str(conf.fold)+'.txt')))
+        if conf.dataset == 'both':
+            bp4d_weight = torch.from_numpy(np.loadtxt(os.path.join(conf.bp4d_dataset_path, 'list', 'BP4D_weight_fold'+str(conf.fold)+'.txt')))
+            disfa_weight = torch.from_numpy(np.loadtxt(os.path.join(conf.disfa_dataset_path, 'list', 'DISFA_weight_fold'+str(conf.fold)+'.txt')))
+        else:
+            train_weight = torch.from_numpy(np.loadtxt(os.path.join(conf.dataset_path, 'list', conf.dataset+'_weight_fold'+str(conf.fold)+'.txt')))
 
     logging.info("Fold: [{} | {}  val_data_num: {} ]".format(conf.fold, conf.N_fold, val_data_num))
 
@@ -189,12 +214,18 @@ def main(conf):
 
     if torch.cuda.is_available():
         net = nn.DataParallel(net).cuda()
-        if conf.dataset != "FEC":
+        if conf.dataset == 'both':
+            bp4d_weight = bp4d_weight.cuda()
+            disfa_weight = disfa_weight.cuda()
+        elif conf.dataset != "FEC":
             train_weight = train_weight.cuda()
 
     margin = 0.2
     if conf.dataset == "FEC":
         criterion = [TripleContrasitiveLoss(margin=margin)]
+    elif conf.dataset == 'both':
+        main_criterion = {"bp4d": WeightedAsymmetricLoss(weight=bp4d_weight, dataset="bp4d"), "disfa": WeightedAsymmetricLoss(weight=disfa_weight, dataset="disfa")}
+        criterion = [main_criterion, nn.CrossEntropyLoss(),BatchContrastiveLoss(margin=margin),nn.MSELoss()]
     else:
         criterion = [WeightedAsymmetricLoss(weight=train_weight), nn.CrossEntropyLoss(),BatchContrastiveLoss(margin=margin),nn.MSELoss()]
     optimizer = optim.AdamW(net.parameters(),  betas=(0.9, 0.999), lr=conf.learning_rate, weight_decay=conf.weight_decay)
@@ -221,11 +252,17 @@ def main(conf):
             logging.info(infostr)
             infostr = {'F1-score-list:'}
             logging.info(infostr)
-            infostr = dataset_info(val_f1_score)
+            if dataset_info is not None:
+                infostr = dataset_info(val_f1_score)
+            else:
+                infostr = f"val_f1_score: {val_f1_score}"
             logging.info(infostr)
             infostr = {'Acc-list:'}
             logging.info(infostr)
-            infostr = dataset_info(val_acc)
+            if dataset_info is not None:
+                infostr = dataset_info(val_acc)
+            else:
+                infostr = f"val_acc: {val_acc}"
             logging.info(infostr)
 
         # save checkpoints

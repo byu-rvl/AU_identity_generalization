@@ -347,3 +347,87 @@ class DISFA(Dataset):
 
     def __len__(self):
         return len(self.data_list)
+
+class BothDatasets(Dataset):
+    def __init__(self, root_path_bp4d, root_path_disfa, train=True, fold=1, transform=None, crop_size=224, stage=1, loader=default_loader, conf=None, do_dataset=None):
+        self.do_dataset = do_dataset
+        if do_dataset == "bp4d":
+            self.bp4d_dataset = BP4D(root_path_bp4d, train, fold, transform, crop_size, stage, loader, conf)
+        elif do_dataset == "disfa":
+            self.disfa_dataset = DISFA(root_path_disfa, train, fold, transform, crop_size, stage, loader, conf)
+        else:
+            raise Exception("do_dataset must be 'bp4d' or 'disfa'")
+        self.train = train
+
+    def __getitem__(self, index):
+        # FACS name BP4D DISFA
+        # 1 Inner brow raiser ✓ ✓
+        # 2 Outer brow raiser ✓ ✓
+        # 4 Brow lowerer ✓ ✓
+        # 6 Cheek raiser ✓ ✓
+        # 7 Lid tightener ✓ ✗
+        # 9 Nose wrinkler ✗ ✓
+        # 10 Upper lip raiser ✓ ✗
+        # 12 Lip corner puller ✓ ✓
+        # 14 Dimpler ✓ ✗
+        # 15 Lip corner depressor ✓ ✗
+        # 17 Chin raiser ✓ ✗
+        # 23 Lip tightener ✓ ✗
+        # 24 Lip pressor ✓ ✗
+        # 25 Lips part ✗ ✓
+        # 26 Jaw drop ✗ ✓
+
+        if self.do_dataset == "bp4d":
+            if self.train:
+                img, label, au_relation, landmark = self.bp4d_dataset[index]
+            else:
+                img, label = self.bp4d_dataset[index]
+            # Map BP4D labels to combined labels
+            combined_label = np.zeros(15, dtype=label.dtype)
+            combined_label[0] = label[0]  # AU1
+            combined_label[1] = label[1]  # AU2
+            combined_label[2] = label[2]  # AU4
+            combined_label[3] = label[3]  # AU6
+            combined_label[4] = label[4]  # AU7
+            combined_label[6] = label[5]  # AU10
+            combined_label[7] = label[6]  # AU12
+            combined_label[8] = label[7]  # AU14
+            combined_label[9] = label[8]  # AU15
+            combined_label[10] = label[9]  # AU17
+            combined_label[11] = label[10]  # AU23
+            combined_label[12] = label[11]  # AU24
+
+            if self.train:
+                return img, combined_label, au_relation, landmark
+            else:
+                return img, combined_label
+        elif self.do_dataset == "disfa":
+            if self.train:
+                img, label, au_relation, landmark = self.disfa_dataset[index]
+            else:
+                img, label = self.disfa_dataset[index]
+            # Map DISFA labels to combined labels
+            combined_label = np.zeros(15, dtype=label.dtype)
+            combined_label[0] = label[0]  # AU1
+            combined_label[1] = label[1]  # AU2
+            combined_label[2] = label[2]  # AU4
+            combined_label[3] = label[3]  # AU6
+            combined_label[5] = label[4]  # AU9
+            combined_label[7] = label[5]  # AU12
+            combined_label[13] = label[6]  # AU25
+            combined_label[14] = label[7]  # AU26 
+
+            if self.train:
+                return img, combined_label, au_relation, landmark
+            else:
+                return img, combined_label
+        else:
+            raise Exception("do_dataset must be 'bp4d' or 'disfa'")
+
+    def __len__(self):
+        if self.do_dataset == "bp4d":
+            return len(self.bp4d_dataset)
+        elif self.do_dataset == "disfa":
+            return len(self.disfa_dataset)
+        else:
+            raise Exception("do_dataset must be 'bp4d' or 'disfa'")

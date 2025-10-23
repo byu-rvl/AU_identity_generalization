@@ -115,6 +115,11 @@ def get_config():
             datasets_cfg = yaml.safe_load(f)
             datasets_cfg = edict(datasets_cfg)
 
+    elif cfg.dataset == 'both':
+        with open('config/both_config.yaml', 'r') as f:
+            datasets_cfg = yaml.safe_load(f)
+            datasets_cfg = edict(datasets_cfg)
+
     else:
         raise Exception("Unkown Datsets:",cfg.dataset)
 
