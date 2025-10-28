@@ -1,0 +1,3 @@
+EBplus_dataset_path: /home/andreww9/groups/grp_RVL_AU/nobackup/autodelete/EBPlus_processed_videos_only
+num_classes: 15 # 12 in BP4D, 8 in DISFA: 5 in both.
+neighbor_num: 4

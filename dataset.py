@@ -431,3 +431,36 @@ class BothDatasets(Dataset):
             return len(self.disfa_dataset)
         else:
             raise Exception("do_dataset must be 'bp4d' or 'disfa'")
+
+
+class EBplus(Dataset):
+    def __init__(self, root_path, transform=None, crop_size = 224, loader=default_loader):
+
+        self._root_path = root_path
+        self._transform = transform
+        self.crop_size = crop_size
+        self.loader = loader
+        self.img_folder_path = os.path.join(root_path,'img')
+        # img
+        image_list_path = os.path.join(root_path, 'list', 'EBplus_image_paths.txt')
+        image_list = open(image_list_path).readlines()
+        # img labels
+        label_list_path = os.path.join(root_path, 'list', 'EBplus_image_labels.txt')
+        label_list = np.loadtxt(label_list_path, dtype=str)
+        # Convert lists of strings to lists of integers
+        label_list = np.array([[int(val) for val in line] for line in label_list])
+        self.data_list = make_dataset(image_list, label_list, train=False)
+        self.to_pil = transforms.ToPILImage()
+            
+    def __getitem__(self, index):
+        img, label = self.data_list[index]
+        
+        img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
+
+        img = self.to_pil(img)
+        if self._transform is not None:
+            img = self._transform(img)
+        return img, label
+
+    def __len__(self):
+        return len(self.data_list)

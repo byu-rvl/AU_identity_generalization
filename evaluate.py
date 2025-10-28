@@ -33,6 +33,13 @@ def get_dataloader(conf):
         print(datasets_cfg.dataset_path)
         valset = DISFA(datasets_cfg.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
         val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
+    
+    elif conf.eval_dataset == 'EBplus':
+        with open('config/EBplus_config.yaml', 'r') as f:
+            datasets_cfg = yaml.safe_load(f)
+            datasets_cfg = edict(datasets_cfg)
+        valset = EBplus(datasets_cfg.EBplus_dataset_path, transform=image_test(crop_size=conf.crop_size))
+        val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
 
     return val_loader, len(valset)
 
@@ -58,8 +65,10 @@ def val(net,val_loader):
             # BP4D AUs are 1, 2, 4, 6, 7, 10, 12, 14, 15, 17, 23, 24
             # DISFA AUs are 1, 2, 4, 6, 9, 12, 25, 26
             # Overlapping AUs are 1, 2, 4, 6, 12
+            # EBplus AUs that are in both are 1,2,4,6,7,10,12,14,15,17,23,24, so missing 25,26
             disfa_overlap_indices = [0,1,2,3,5]  # AUs 1,2,4,6,12
             bp4d_overlap_indices = [0,1,2,3,7]
+            ebplus_overlap_indices = [0,1,2,3,4,6,7,8,9,10,11,12]
 
             if conf.dataset == conf.eval_dataset:
                 update_list = statistics(outputs, targets.detach(), 0.5)
@@ -71,6 +80,8 @@ def val(net,val_loader):
                 elif conf.dataset == 'DISFA':
                     update_list_overlap = statistics(outputs[:, disfa_overlap_indices], targets[:, disfa_overlap_indices].detach(), 0.5)
                     statistics_list_overlap = update_statistics_list(statistics_list_overlap, update_list_overlap)
+                else:
+                    raise Exception("Overlap statistics not defined for this dataset.")
 
             if conf.dataset == 'BP4D' and conf.eval_dataset == 'DISFA':
                 outputs_overlap = outputs[:, bp4d_overlap_indices]
@@ -82,6 +93,13 @@ def val(net,val_loader):
                 targets_overlap = targets[:, bp4d_overlap_indices]
                 update_list = statistics(outputs_overlap, targets_overlap.detach(), 0.5)
                 statistics_list_overlap = update_statistics_list(statistics_list_overlap, update_list)
+            elif conf.dataset == 'both' and conf.eval_dataset == 'EBplus':
+                outputs_overlap = outputs[:, ebplus_overlap_indices]
+                targets_overlap = targets
+                update_list = statistics(outputs_overlap, targets_overlap.detach(), 0.5)
+                statistics_list_overlap = update_statistics_list(statistics_list_overlap, update_list)
+            else:
+                raise Exception("Cross-dataset statistics not defined for these datasets.")
             
     if statistics_list is not None:
         mean_f1_score, f1_score_list = calc_f1_score(statistics_list)
@@ -102,6 +120,12 @@ def main(conf):
     elif conf.dataset == 'DISFA':
         dataset_info = DISFA_infolist
         numberLmks=66
+    elif conf.dataset == 'both':
+        dataset_info = None
+        numberLmks=66 #TODO: if I use landmarks, I will need to update this.
+    
+    if conf.eval_dataset == 'EBplus':
+        dataset_info = EBplus_infolist
 
     # data
     val_loader,val_data_num = get_dataloader(conf)
@@ -140,17 +164,30 @@ def main(conf):
         infostr = dataset_info(val_acc)
         logging.info(infostr)
     
-    infostr = {'Validation on overlapping AUs: val_mean_f1_score {:.2f},val_mean_acc {:.2f}'
-            .format(100.* val_mean_f1_score_overlap, 100.* val_mean_acc_overlap)}
-    logging.info(infostr)
-    infostr = {'F1-score-list:'}
-    logging.info(infostr)
-    infostr = overlap_infolist(val_f1_score_overlap)
-    logging.info(infostr)
-    infostr = {'Acc-list:'}
-    logging.info(infostr)
-    infostr = overlap_infolist(val_acc_overlap)
-    logging.info(infostr)
+    if conf.eval_dataset == 'EBplus':
+        infostr = {'Validation on overlapping AUs: val_mean_f1_score {:.2f},val_mean_acc {:.2f}'
+                .format(100.* val_mean_f1_score_overlap, 100.* val_mean_acc_overlap)}
+        logging.info(infostr)
+        infostr = {'F1-score-list:'}
+        logging.info(infostr)
+        infostr = dataset_info(val_f1_score_overlap)
+        logging.info(infostr)
+        infostr = {'Acc-list:'}
+        logging.info(infostr)
+        infostr = dataset_info(val_acc_overlap)
+        logging.info(infostr)
+    else:
+        infostr = {'Validation on overlapping AUs: val_mean_f1_score {:.2f},val_mean_acc {:.2f}'
+                .format(100.* val_mean_f1_score_overlap, 100.* val_mean_acc_overlap)}
+        logging.info(infostr)
+        infostr = {'F1-score-list:'}
+        logging.info(infostr)
+        infostr = overlap_infolist(val_f1_score_overlap)
+        logging.info(infostr)
+        infostr = {'Acc-list:'}
+        logging.info(infostr)
+        infostr = overlap_infolist(val_acc_overlap)
+        logging.info(infostr)
 
 
 # ---------------------------------------------------------------------------------

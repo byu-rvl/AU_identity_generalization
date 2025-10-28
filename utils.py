@@ -36,6 +36,9 @@ def statistics(pred, y, thresh):
         FN = 0
         TN = 0
         for i in range(batch_size):
+            if y[i][j] == 9:  # ignore label, skip. This is the flag from the EBplus dataset when face is out of the frame.
+                continue
+
             if pred[i][j] == 1:
                 if y[i][j] == 1:
                     TP += 1
@@ -134,6 +137,20 @@ def BP4D_infolist(list):
 def DISFA_infolist(list):
     infostr = {'AU1: {:.2f} AU2: {:.2f} AU4: {:.2f}  AU6: {:.2f} AU9: {:.2f} AU12: {:.2f}  AU25: {:.2f} AU26: {:.2f} '.format(100.*list[0],100.*list[1],100.*list[2],100.*list[3],100.*list[4],100.*list[5],100.*list[6],100.*list[7])}
     return infostr
+
+def EBplus_infolist(list):
+    # list has AUs: 1,2,4,6,7,10,12,14,15,17,23,24, so 12 AUs
+    infostr = 'EBplus: AU1: {:.2f} AU2: {:.2f} AU4: {:.2f} AU6: {:.2f} AU7: {:.2f} AU10: {:.2f} AU12: {:.2f} AU14: {:.2f} AU15: {:.2f} AU17: {:.2f} AU23: {:.2f} AU24: {:.2f} '.format(100.*list[0],100.*list[1],100.*list[2],100.*list[3],100.*list[4],100.*list[5],100.*list[6],100.*list[7],100.*list[8],100.*list[9],100.*list[10],100.*list[11])
+    # BP4D AUs are 1, 2, 4, 6, 7, 10, 12, 14, 15, 17, 23, 24
+    # Overlapping AUs are 1, 2, 4, 6, 7, 10, 12, 14, 15, 17, 23, 24 (all BP4D are in EBplus)
+    infostr += "\nBP4D Overlap is the same as EBplus line above. "
+    # DISFA AUs are 1, 2, 4, 6, 9, 12, 25, 26
+    # Overlapping AUs are 1, 2, 4, 6, 12
+    disfa_indices_in_ebplus = [0,1,2,3,6]
+    infostr += '\nDISFA Overlap (same as 5 normal overlap): AU1: {:.2f} AU2: {:.2f} AU4: {:.2f} AU6: {:.2f} AU12: {:.2f} '.format(100.*list[0],100.*list[1],100.*list[2],100.*list[3],100.*list[6])
+    infostr += '\n(Note: EBplus does not have DISFA AUs 9, 25, 26). '
+    infostr += '\nThe cross 5 AU overlap average (AUs 1,2,4,6,12) F1 score between EBplus and DISFA is: {:.2f}'.format(100.*(sum([list[i] for i in disfa_indices_in_ebplus])/len(disfa_indices_in_ebplus)))
+    return {infostr}
 
 def overlap_infolist(list):
     infostr = {'AU1: {:.2f} AU2: {:.2f} AU4: {:.2f}  AU6: {:.2f} AU12: {:.2f} '.format(100.*list[0],100.*list[1],100.*list[2],100.*list[3],100.*list[4])}
