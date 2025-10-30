@@ -199,8 +199,43 @@ def main(conf):
     train_loader,val_loader,train_data_num,val_data_num = get_dataloader(conf)
     if conf.dataset != "FEC":
         if conf.dataset == 'both':
-            bp4d_weight = torch.from_numpy(np.loadtxt(os.path.join(conf.bp4d_dataset_path, 'list', 'BP4D_weight_fold'+str(conf.fold)+'.txt')))
-            disfa_weight = torch.from_numpy(np.loadtxt(os.path.join(conf.disfa_dataset_path, 'list', 'DISFA_weight_fold'+str(conf.fold)+'.txt')))
+            bp4d_class_totals = np.loadtxt('/fslhome/andreww9/code/original_datasets/BP4D_croppped_MTCNN/list/BP4D_class_totals_fold'+str(conf.fold)+'.txt')
+            disfa_class_totals = np.loadtxt('/home/andreww9/fsl_groups/grp_RVL_AU/code/DISFA_LEFT_cropped_MTCNN/list/DISFA_class_totals_fold'+str(conf.fold)+'.txt')
+
+            # BP4D has 12 AUs: 1,2,4,6,7,10,12,14,15,17,23,24
+            # DISFA has 8 AUs: 1,2,4,6,9,12,25,26
+            # Together they have 15 unique AUs: 1,2,4,6,7,9,10,12,14,15,17,23,24,25,26
+            all_class_totals = [0] * 15
+            # Map BP4D class totals
+            BP4D_indices = [0,1,2,3,4,6,7,8,9,10,11,12]
+            DISFA_indices = [0,1,2,3,5,7,13,14]
+            for i in range(len(all_class_totals)):
+                if i in BP4D_indices:
+                    bp4d_index = BP4D_indices.index(i)
+                    all_class_totals[i] += bp4d_class_totals[bp4d_index]
+                if i in DISFA_indices:
+                    disfa_index = DISFA_indices.index(i)
+                    all_class_totals[i] += disfa_class_totals[disfa_index]
+
+            all_class_totals = np.array(all_class_totals)
+            all_class_totals = all_class_totals / all_class_totals.sum()
+            all_class_weights = 1.0 / all_class_totals
+            
+            bp4d_weight = []
+            disfa_weight = []
+            for i in range(len(all_class_weights)):
+                if i in BP4D_indices:
+                    bp4d_weight.append(all_class_weights[i])
+                if i in DISFA_indices:
+                    disfa_weight.append(all_class_weights[i])
+            bp4d_weight = np.array(bp4d_weight)
+            disfa_weight = np.array(disfa_weight)
+            bp4d_weight = bp4d_weight / bp4d_weight.sum() * bp4d_weight.shape[0]
+            disfa_weight = disfa_weight / disfa_weight.sum() * disfa_weight.shape
+            bp4d_weight = torch.from_numpy(bp4d_weight)
+            disfa_weight = torch.from_numpy(disfa_weight)
+
+            # raise Exception("Need to implement class weights for both datasets.")
         else:
             train_weight = torch.from_numpy(np.loadtxt(os.path.join(conf.dataset_path, 'list', conf.dataset+'_weight_fold'+str(conf.fold)+'.txt')))
 
