@@ -270,7 +270,7 @@ def load_state_dict(model,path):
 
 
 class WeightedAsymmetricLoss(nn.Module):
-    def __init__(self, eps=1e-8, disable_torch_grad=True, weight=None, dataset=None):
+    def __init__(self, eps=1e-8, disable_torch_grad=True, weight=None, dataset=None, smoothing=0.0):
         super(WeightedAsymmetricLoss, self).__init__()
         self.disable_torch_grad = disable_torch_grad
         self.eps = eps
@@ -280,6 +280,8 @@ class WeightedAsymmetricLoss(nn.Module):
         self.bp4d_indicies = [0,1,2,3,4,6,7,8,9,10,11,12]
         self.disfa_indicies = [0,1,2,3,5,7,13,14]
 
+        self.smoothing = smoothing
+
     def forward(self, x, y):
 
         if self.dataset == "bp4d":
@@ -288,6 +290,10 @@ class WeightedAsymmetricLoss(nn.Module):
         elif self.dataset == "disfa":
             x = x[:, self.disfa_indicies]
             y = y[:, self.disfa_indicies]
+
+        if self.smoothing > 0:
+            x[x<self.smoothing] = 0.0
+            x[x>1-self.smoothing] = 1.0
 
         xs_pos = x
         xs_neg = 1 - x
