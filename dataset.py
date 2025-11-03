@@ -190,7 +190,7 @@ class BP4D(Dataset):
             img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
             if self.do_clahe and self.clahe_processor is None:
                 self.clahe_processor = RunCLAHE()
-            if self.preprocessing is None and self.proportion_with_frst > 0.0:
+            if self.preprocessing is None and (self.proportion_with_frst > 0.0 or self.proportion_with_frst == -1.0):
                 self.preprocessing = RunFRST(self.conf)
             if self.do_clahe:
                 img = self.clahe_processor.run_clahe(img)
@@ -201,6 +201,14 @@ class BP4D(Dataset):
                 else:
                     # When I don't have the run_clahe, I need to reshape to C, H, W
                     img = np.transpose(img, (2, 0, 1))
+            elif self.proportion_with_frst == -1.0:
+                aug_img = self.preprocessing.run_fsrt(img, index)[0]
+                if self.do_clahe:
+                    aug_img = self.clahe_processor.run_clahe(aug_img.numpy())
+                else:
+                    # When I don't have the run_clahe, I need to reshape to C, H, W
+                    aug_img = np.transpose(aug_img, (2, 0, 1))
+                aug_img = self.to_pil(aug_img)
             img = self.to_pil(img)
             # Save image for debugging
             # img.save(f"debug/debug_img_{index}.jpg")
@@ -210,10 +218,15 @@ class BP4D(Dataset):
                 offset_x = random.randint(0, w - self.crop_size)
                 flip = random.randint(0, 1)
                 img = self._transform(img, flip, offset_x, offset_y)
-            
+                if self.proportion_with_frst == -1.0:
+                    aug_img = self._transform(aug_img, flip, offset_x, offset_y)
+
             landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
 
-            return img, label, au_relation, landmark
+            if self.proportion_with_frst == -1.0:
+                return img, aug_img, label, au_relation, landmark
+            else:
+                return img, label, au_relation, landmark
         else:
             img, label = self.data_list[index]
             
@@ -297,7 +310,7 @@ class DISFA(Dataset):
             img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
             if self.do_clahe and self.clahe_processor is None:
                 self.clahe_processor = RunCLAHE()
-            if self.preprocessing is None and self.proportion_with_frst > 0.0:
+            if self.preprocessing is None and (self.proportion_with_frst > 0.0 or self.proportion_with_frst == -1.0):
                 self.preprocessing = RunFRST(self.conf)
             if self.do_clahe:
                 img = self.clahe_processor.run_clahe(img)
@@ -308,6 +321,14 @@ class DISFA(Dataset):
                 else:
                     # When I don't have the run_clahe, I need to reshape to C, H, W
                     img = np.transpose(img, (2, 0, 1))
+            elif self.proportion_with_frst == -1.0:
+                aug_img = self.preprocessing.run_fsrt(img, index)[0]
+                if self.do_clahe:
+                    aug_img = self.clahe_processor.run_clahe(aug_img.numpy())
+                else:
+                    # When I don't have the run_clahe, I need to reshape to C, H, W
+                    aug_img = np.transpose(aug_img, (2, 0, 1))
+                aug_img = self.to_pil(aug_img)
             img = self.to_pil(img)
             # Save image for debugging
             # img.save(f"debug/debug_img_{index}.jpg")
@@ -317,10 +338,15 @@ class DISFA(Dataset):
                 offset_x = random.randint(0, w - self.crop_size)
                 flip = random.randint(0, 1)
                 img = self._transform(img, flip, offset_x, offset_y)
+                if self.proportion_with_frst == -1.0:
+                    aug_img = self._transform(aug_img, flip, offset_x, offset_y)
             
             landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
 
-            return img, label, au_relation, landmark
+            if self.proportion_with_frst == -1.0:
+                return img, aug_img, label, au_relation, landmark
+            else:
+                return img, label, au_relation, landmark
         else:
             img, label = self.data_list[index]
             
@@ -358,6 +384,7 @@ class BothDatasets(Dataset):
         else:
             raise Exception("do_dataset must be 'bp4d' or 'disfa'")
         self.train = train
+        self.proportion_with_frst = conf.proportion_with_frst
 
     def __getitem__(self, index):
         # FACS name BP4D DISFA
@@ -378,7 +405,9 @@ class BothDatasets(Dataset):
         # 26 Jaw drop ✗ ✓
 
         if self.do_dataset == "bp4d":
-            if self.train:
+            if self.train and self.proportion_with_frst == -1.0:
+                img, aug_img, label, au_relation, landmark = self.bp4d_dataset[index]
+            elif self.train:
                 img, label, au_relation, landmark = self.bp4d_dataset[index]
             else:
                 img, label = self.bp4d_dataset[index]
@@ -397,12 +426,16 @@ class BothDatasets(Dataset):
             combined_label[11] = label[10]  # AU23
             combined_label[12] = label[11]  # AU24
 
-            if self.train:
+            if self.train and self.proportion_with_frst == -1.0:
+                return img, aug_img, combined_label, au_relation, landmark
+            elif self.train:
                 return img, combined_label, au_relation, landmark
             else:
                 return img, combined_label
         elif self.do_dataset == "disfa":
-            if self.train:
+            if self.train and self.proportion_with_frst == -1.0:
+                img, aug_img, label, au_relation, landmark = self.disfa_dataset[index]
+            elif self.train:
                 img, label, au_relation, landmark = self.disfa_dataset[index]
             else:
                 img, label = self.disfa_dataset[index]
@@ -417,7 +450,9 @@ class BothDatasets(Dataset):
             combined_label[13] = label[6]  # AU25
             combined_label[14] = label[7]  # AU26 
 
-            if self.train:
+            if self.train and self.proportion_with_frst == -1.0:
+                return img, aug_img, combined_label, au_relation, landmark
+            elif self.train:
                 return img, combined_label, au_relation, landmark
             else:
                 return img, combined_label

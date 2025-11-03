@@ -119,7 +119,15 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
     for batch_idx, data in enumerate(tqdm(train_loader)):
         if conf.dataset == "both":
             data, dataset_flags = data    
-        inputs,  targets, relations, lmk_true = data
+        if conf.proportion_with_frst != -1.0:
+            inputs,  targets, relations, lmk_true = data
+        else:
+            inputs, aug_inputs, targets, relations, lmk_true = data
+            # concatente inputs and aug_inputs in the batch dimension
+            inputs = torch.cat((inputs, aug_inputs), 0)
+            targets = torch.cat((targets, targets), 0)
+            relations = torch.cat((relations, relations), 0)
+            lmk_true = torch.cat((lmk_true, lmk_true), 0)
         adjust_learning_rate(optimizer, epoch, conf.epochs, conf.learning_rate, batch_idx, train_loader_len)
         targets = targets.float()
         lmk_true = lmk_true.float()
