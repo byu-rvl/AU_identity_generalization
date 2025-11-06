@@ -123,11 +123,12 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
             inputs,  targets, relations, lmk_true = data
         else:
             inputs, aug_inputs, targets, relations, lmk_true = data
+            fsrt_batch_size = inputs.shape[0]
             # concatente inputs and aug_inputs in the batch dimension
             inputs = torch.cat((inputs, aug_inputs), 0)
-            targets = torch.cat((targets, targets), 0)
-            relations = torch.cat((relations, relations), 0)
-            lmk_true = torch.cat((lmk_true, lmk_true), 0)
+            # targets = torch.cat((targets, targets), 0)
+            # relations = torch.cat((relations, relations), 0)
+            # lmk_true = torch.cat((lmk_true, lmk_true), 0)
         adjust_learning_rate(optimizer, epoch, conf.epochs, conf.learning_rate, batch_idx, train_loader_len)
         targets = targets.float()
         lmk_true = lmk_true.float()
@@ -136,26 +137,64 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
         optimizer.zero_grad()
         outputs, outputs_relation, emb_out, lmk_out = net(inputs)
         if conf.dataset == "both" and dataset_flags == "bp4d":
-            loss = criterion[0]["bp4d"](outputs, targets)
+            if conf.proportion_with_frst != -1.0:
+                loss = criterion[0]["bp4d"](outputs, targets)
+            else:
+                normal_outputs = outputs[:fsrt_batch_size]
+                fsrt_outputs = outputs[fsrt_batch_size:]
+                loss_normal = criterion[0]["bp4d"](normal_outputs, targets)
+                loss_fsrt = criterion[0]["bp4d"](fsrt_outputs, targets)
+                loss = loss_normal + loss_fsrt
         elif conf.dataset == "both" and dataset_flags == "disfa":
-            loss = criterion[0]["disfa"](outputs, targets)
+            if conf.proportion_with_frst != -1.0:
+                loss = criterion[0]["disfa"](outputs, targets)
+            else:
+                normal_outputs = outputs[:fsrt_batch_size]
+                fsrt_outputs = outputs[fsrt_batch_size:]
+                loss_normal = criterion[0]["disfa"](normal_outputs, targets)
+                loss_fsrt = criterion[0]["disfa"](fsrt_outputs, targets)
+                loss = loss_normal + loss_fsrt
+        elif conf.proportion_with_frst != 0.0:
+            if conf.proportion_with_frst == 1.0:
+                loss = criterion[0](outputs, targets)
+            else:
+                normal_outputs = outputs[:fsrt_batch_size]
+                fsrt_outputs = outputs[fsrt_batch_size:]
+                loss_normal = criterion[0](normal_outputs, targets)
+                loss_fsrt = criterion[0](fsrt_outputs, targets)
+                loss = loss_normal + loss_fsrt
         else:
-            wa_loss = criterion[0](outputs, targets)
-            edge_loss = criterion[1](outputs_relation.view(-1,4), relations.view(-1).long())
-            contrasitive_loss = criterion[2](emb_out, targets)
-            lmk_loss = criterion[3](lmk_out.float(), lmk_true)
-            loss = wa_loss + conf.lam_edge * edge_loss + conf.lam_contrasitive * contrasitive_loss + conf.lam_lmk * lmk_loss
+            loss = criterion[0](outputs, targets)
+        if conf.proportion_with_frst == -1.0:
+            output_relations_normal = outputs_relation[:fsrt_batch_size]
+            output_relations_fsrt = outputs_relation[fsrt_batch_size:]
+
+            # edge_loss_normal = criterion[1](output_relations_normal.view(-1,4), relations.view(-1).long())
+            # edge_loss_fsrt = criterion[1](output_relations_fsrt.view(-1,4), relations.view(-1).long())
+            # edge_loss = edge_loss_normal + edge_loss_fsrt
+            contrasitive_loss_normal = criterion[2](emb_out[:fsrt_batch_size], targets)
+            contrasitive_loss_fsrt = criterion[2](emb_out[fsrt_batch_size:], targets)
+            contrasitive_loss = contrasitive_loss_normal + contrasitive_loss_fsrt
+
+            loss = loss + conf.lam_contrasitive * contrasitive_loss
+
+
+            # edge_loss = criterion[1](outputs_relation.view(-1,4), relations.view(-1).long())
+            # edge_loss = criterion[1](outputs_relation.view(-1,4), relations.view(-1).long())
+            # contrasitive_loss = criterion[2](emb_out, targets)
+            # lmk_loss = criterion[3](lmk_out.float(), lmk_true)
+            # loss = wa_loss + conf.lam_edge * edge_loss + conf.lam_contrasitive * contrasitive_loss + conf.lam_lmk * lmk_loss
         loss.backward()
         optimizer.step()
         losses.update(loss.data.item(), inputs.size(0))
-        if conf.dataset != "both":
-            losses1.update(wa_loss.data.item(), inputs.size(0))
-            losses2.update(edge_loss.data.item(), inputs.size(0))
-            losses3.update(contrasitive_loss.data.item(), inputs.size(0))
-        else:
-            losses1.update(0.0, inputs.size(0))
-            losses2.update(0.0, inputs.size(0))
-            losses3.update(0.0, inputs.size(0))
+        # if conf.dataset != "both":
+        #     losses1.update(wa_loss.data.item(), inputs.size(0))
+        #     losses2.update(edge_loss.data.item(), inputs.size(0))
+        #     losses3.update(contrasitive_loss.data.item(), inputs.size(0))
+        # else:
+        losses1.update(0.0, inputs.size(0))
+        losses2.update(0.0, inputs.size(0))
+        losses3.update(0.0, inputs.size(0))
     return losses.avg, losses1.avg, losses2.avg, losses3.avg
 
 

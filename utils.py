@@ -280,16 +280,27 @@ class WeightedAsymmetricLoss(nn.Module):
         self.bp4d_indicies = [0,1,2,3,4,6,7,8,9,10,11,12]
         self.disfa_indicies = [0,1,2,3,5,7,13,14]
 
+        # The fsrt images should not use AUs: 4,7, and 24.
+        self.bp4d_fsrt_indicies = [0,1,3,6,7,8,9,10,11]
+        self.disfa_fsrt_indicies = [0,1,3,5,7,13,14]
+
         self.smoothing = smoothing
 
-    def forward(self, x, y):
+    # def forward(self, x, y):
+    def forward(self, x, y, is_fsrt=False):
 
-        if self.dataset == "bp4d":
+        if self.dataset == "bp4d" and not is_fsrt:
             x = x[:, self.bp4d_indicies]
             y = y[:, self.bp4d_indicies]
-        elif self.dataset == "disfa":
+        elif self.dataset == "bp4d" and is_fsrt:
+            x = x[:, self.bp4d_fsrt_indicies]
+            y = y[:, self.bp4d_fsrt_indicies]
+        elif self.dataset == "disfa" and not is_fsrt:
             x = x[:, self.disfa_indicies]
             y = y[:, self.disfa_indicies]
+        elif self.dataset == "disfa" and is_fsrt:
+            x = x[:, self.disfa_fsrt_indicies]
+            y = y[:, self.disfa_fsrt_indicies]
 
         if self.smoothing > 0:
             x[x<self.smoothing] = 0.0

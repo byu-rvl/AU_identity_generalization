@@ -67,7 +67,7 @@ def val(net,val_loader):
             # Overlapping AUs are 1, 2, 4, 6, 12
             # EBplus AUs that are in both are 1,2,4,6,7,10,12,14,15,17,23,24, so missing 25,26
             disfa_overlap_indices = [0,1,2,3,5]  # AUs 1,2,4,6,12
-            bp4d_overlap_indices = [0,1,2,3,7]
+            bp4d_overlap_indices = [0,1,2,3,6]
             ebplus_overlap_indices = [0,1,2,3,4,6,7,8,9,10,11,12]
 
             if conf.dataset == conf.eval_dataset:
