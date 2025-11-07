@@ -220,7 +220,10 @@ def val(net,val_loader,criterion):
                 loss = criterion[0](outputs, targets)
             losses.update(loss.data.item(), inputs.size(0))
             update_list = statistics(outputs, targets.detach(), 0.5)
-            statistics_list = update_statistics_list(statistics_list, update_list)
+            if conf.dataset == "both":
+                statistics_list = update_statistics_list(statistics_list, update_list, dataset_flag=dataset_flags)
+            else:
+                statistics_list = update_statistics_list(statistics_list, update_list)
     mean_f1_score, f1_score_list = calc_f1_score(statistics_list)
     mean_acc, acc_list = calc_acc(statistics_list)
     return losses.avg, mean_f1_score, f1_score_list, mean_acc, acc_list

@@ -92,13 +92,26 @@ def calc_acc(statistics_list):
     return mean_acc_score, acc_list
 
 
-def update_statistics_list(old_list, new_list):
+def update_statistics_list(old_list, new_list, dataset_flag=None):
     if not old_list:
         return new_list
 
     assert len(old_list) == len(new_list)
 
-    for i in range(len(old_list)):
+    bp4d_indicies = [0,1,2,3,4,6,7,8,9,10,11,12]
+    disfa_indicies = [0,1,2,3,5,7,13,14]
+
+    if dataset_flag is None:
+        use_indicies = list(range(len(old_list)))
+    elif dataset_flag == "bp4d":
+        use_indicies = bp4d_indicies
+    elif dataset_flag == "disfa":
+        use_indicies = disfa_indicies
+    else:
+        raise ValueError("dataset_flag must be None, 'bp4d', or 'disfa'")
+
+    # for i in range(len(old_list)):
+    for i in use_indicies:
         old_list[i]['TP'] += new_list[i]['TP']
         old_list[i]['FP'] += new_list[i]['FP']
         old_list[i]['TN'] += new_list[i]['TN']
