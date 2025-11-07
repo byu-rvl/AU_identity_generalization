@@ -58,6 +58,7 @@ parser.add_argument('--fsrt_vox', default=2, type=int, help='1: use Voxceleb1 fo
 parser.add_argument('--eval_fsrt', action='store_true', help='Whether to apply FRST during evaluation')
 parser.add_argument('--agg', default='fast', type=str, choices=['fast', 'original'], help="type of AGG module to use")
 parser.add_argument('--smoothing', default=0.0, type=float, help="label smoothing value")
+parser.add_argument('--limitFsrtLoss', action='store_true', help='Whether to limit the FSRT loss to only those samples that have FRST applied')
 
 # ------------------------------
 

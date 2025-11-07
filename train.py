@@ -306,7 +306,7 @@ def main(conf):
     if conf.dataset == "FEC":
         criterion = [TripleContrasitiveLoss(margin=margin)]
     elif conf.dataset == 'both':
-        main_criterion = {"bp4d": WeightedAsymmetricLoss(weight=bp4d_weight, dataset="bp4d", smoothing=conf.smoothing), "disfa": WeightedAsymmetricLoss(weight=disfa_weight, dataset="disfa", smoothing=conf.smoothing)}
+        main_criterion = {"bp4d": WeightedAsymmetricLoss(weight=bp4d_weight, dataset="bp4d", smoothing=conf.smoothing, limitFsrtLoss=conf.limitFsrtLoss), "disfa": WeightedAsymmetricLoss(weight=disfa_weight, dataset="disfa", smoothing=conf.smoothing, limitFsrtLoss=conf.limitFsrtLoss)}
         criterion = [main_criterion, nn.CrossEntropyLoss(),BatchContrastiveLoss(margin=margin),nn.MSELoss()]
     else:
         criterion = [WeightedAsymmetricLoss(weight=train_weight), nn.CrossEntropyLoss(),BatchContrastiveLoss(margin=margin),nn.MSELoss()]

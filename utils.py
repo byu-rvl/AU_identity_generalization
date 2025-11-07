@@ -270,7 +270,7 @@ def load_state_dict(model,path):
 
 
 class WeightedAsymmetricLoss(nn.Module):
-    def __init__(self, eps=1e-8, disable_torch_grad=True, weight=None, dataset=None, smoothing=0.0):
+    def __init__(self, eps=1e-8, disable_torch_grad=True, weight=None, dataset=None, smoothing=0.0, limitFsrtLoss=False):
         super(WeightedAsymmetricLoss, self).__init__()
         self.disable_torch_grad = disable_torch_grad
         self.eps = eps
@@ -280,9 +280,13 @@ class WeightedAsymmetricLoss(nn.Module):
         self.bp4d_indicies = [0,1,2,3,4,6,7,8,9,10,11,12]
         self.disfa_indicies = [0,1,2,3,5,7,13,14]
 
-        # The fsrt images should not use AUs: 4,7, and 24.
-        self.bp4d_fsrt_indicies = [0,1,3,6,7,8,9,10,11]
-        self.disfa_fsrt_indicies = [0,1,3,5,7,13,14]
+        if limitFsrtLoss:
+            # The fsrt images should not use AUs: 4,7, and 24.
+            self.bp4d_fsrt_indicies = [0,1,3,6,7,8,9,10,11]
+            self.disfa_fsrt_indicies = [0,1,3,5,7,13,14]
+        else:
+            self.bp4d_fsrt_indicies = self.bp4d_indicies
+            self.disfa_fsrt_indicies = self.disfa_indicies
 
         self.smoothing = smoothing
 
