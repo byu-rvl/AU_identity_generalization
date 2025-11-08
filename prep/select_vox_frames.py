@@ -367,8 +367,10 @@ if __name__ == '__main__':
     # vox_celeb1_dir_best_frames = "/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames/"
     vox_celeb1_dir_best_frames = "/home/andreww9/groups/grp_face_race/code/VoxCeleb1_train_best_frames_new/"
 
-    vox_celeb2_dir = "/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_train/"
-    vox_celeb2_dir_best_frames = "/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_train_best_frames/"
+    # vox_celeb2_dir = "/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_train/"
+    # vox_celeb2_dir_best_frames = "/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_train_best_frames/"
+    vox_celeb2_dir = "/home/andreww9/groups/grp_ensembleAU2/nobackup/archive/VoxCeleb2_train_all/"
+    vox_celeb2_dir_best_frames = "/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_all_train_best_frames/"
 
     # vox_celeb_to_process_dir = vox_celeb1_dir
     # vox_celeb_to_process_dir_best_frames = vox_celeb1_dir_best_frames

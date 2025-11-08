@@ -14,37 +14,42 @@ from dataset import *
 from utils import *
 from conf import get_config,set_logger,set_outdir,set_env
 
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
 def get_dataloader(conf):
     print('==> Preparing data...')
     if conf.dataset == 'BP4D':
         trainset = BP4D(conf.dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf)
-        train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers)
+        train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers, worker_init_fn=seed_worker)
         valset = BP4D(conf.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
-        val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
+        val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers, worker_init_fn=seed_worker)
 
     elif conf.dataset == 'DISFA':
         trainset = DISFA(conf.dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf)
-        train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers)
+        train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers, worker_init_fn=seed_worker)
         valset = DISFA(conf.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
-        val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
+        val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers, worker_init_fn=seed_worker)
 
     elif conf.dataset == 'FEC':
         trainset = FEC(conf.dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 2, conf=conf)
-        train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers, drop_last=True)
+        train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers, drop_last=True, worker_init_fn=seed_worker)
         valset = FEC(conf.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 2, conf=conf)
-        val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
+        val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers, worker_init_fn=seed_worker)
 
     elif conf.dataset == 'both':
         bp4d_trainset = BothDatasets(do_dataset="bp4d", root_path_bp4d=conf.bp4d_dataset_path, root_path_disfa=conf.disfa_dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf)
-        bp4d_trainloader = DataLoader(bp4d_trainset, batch_size=conf.batch_size//2, shuffle=True, num_workers=conf.num_workers)
+        bp4d_trainloader = DataLoader(bp4d_trainset, batch_size=conf.batch_size//2, shuffle=True, num_workers=conf.num_workers, worker_init_fn=seed_worker)
         disfa_trainset = BothDatasets(do_dataset="disfa", root_path_bp4d=conf.bp4d_dataset_path, root_path_disfa=conf.disfa_dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf)
-        disfa_trainloader = DataLoader(disfa_trainset, batch_size=conf.batch_size//2, shuffle=True, num_workers=conf.num_workers)
+        disfa_trainloader = DataLoader(disfa_trainset, batch_size=conf.batch_size//2, shuffle=True, num_workers=conf.num_workers, worker_init_fn=seed_worker)
         train_loader = CombinedDataLoader(bp4d_trainloader, disfa_trainloader)
         # train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers)
         bp4d_valset = BothDatasets(do_dataset="bp4d", root_path_bp4d=conf.bp4d_dataset_path, root_path_disfa=conf.disfa_dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
         disfa_valset = BothDatasets(do_dataset="disfa", root_path_bp4d=conf.bp4d_dataset_path, root_path_disfa=conf.disfa_dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
-        bp4d_valloader = DataLoader(bp4d_valset, batch_size=conf.batch_size//2, shuffle=False, num_workers=conf.num_workers)
-        disfa_valloader = DataLoader(disfa_valset, batch_size=conf.batch_size//2, shuffle=False, num_workers=conf.num_workers)
+        bp4d_valloader = DataLoader(bp4d_valset, batch_size=conf.batch_size//2, shuffle=False, num_workers=conf.num_workers, worker_init_fn=seed_worker)
+        disfa_valloader = DataLoader(disfa_valset, batch_size=conf.batch_size//2, shuffle=False, num_workers=conf.num_workers, worker_init_fn=seed_worker)
         val_loader = CombinedDataLoader(bp4d_valloader, disfa_valloader)
         # val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
         trainset = bp4d_trainset + disfa_trainset
@@ -230,6 +235,19 @@ def val(net,val_loader,criterion):
 
 
 def main(conf):
+    # Set seeds for reproducibility
+    seed = 42
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    
+    # For full determinism
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
     if conf.dataset == 'BP4D':
         dataset_info = BP4D_infolist
         numberLmks=49
