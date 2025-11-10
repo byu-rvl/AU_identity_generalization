@@ -147,8 +147,8 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
             else:
                 normal_outputs = outputs[:fsrt_batch_size]
                 fsrt_outputs = outputs[fsrt_batch_size:]
-                loss_normal = criterion[0]["bp4d"](normal_outputs, targets)
-                loss_fsrt = criterion[0]["bp4d"](fsrt_outputs, targets)
+                loss_normal = criterion[0]["bp4d"](normal_outputs, targets, is_fsrt=False)
+                loss_fsrt = criterion[0]["bp4d"](fsrt_outputs, targets, is_fsrt=True)
                 loss = loss_normal + loss_fsrt
         elif conf.dataset == "both" and dataset_flags == "disfa":
             if conf.proportion_with_frst != -1.0:
@@ -156,8 +156,8 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
             else:
                 normal_outputs = outputs[:fsrt_batch_size]
                 fsrt_outputs = outputs[fsrt_batch_size:]
-                loss_normal = criterion[0]["disfa"](normal_outputs, targets)
-                loss_fsrt = criterion[0]["disfa"](fsrt_outputs, targets)
+                loss_normal = criterion[0]["disfa"](normal_outputs, targets, is_fsrt=False)
+                loss_fsrt = criterion[0]["disfa"](fsrt_outputs, targets, is_fsrt=True)
                 loss = loss_normal + loss_fsrt
         elif conf.proportion_with_frst != 0.0:
             if conf.proportion_with_frst == 1.0:
@@ -165,8 +165,8 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
             else:
                 normal_outputs = outputs[:fsrt_batch_size]
                 fsrt_outputs = outputs[fsrt_batch_size:]
-                loss_normal = criterion[0](normal_outputs, targets)
-                loss_fsrt = criterion[0](fsrt_outputs, targets)
+                loss_normal = criterion[0](normal_outputs, targets, is_fsrt=False)
+                loss_fsrt = criterion[0](fsrt_outputs, targets, is_fsrt=True)
                 loss = loss_normal + loss_fsrt
         else:
             loss = criterion[0](outputs, targets)

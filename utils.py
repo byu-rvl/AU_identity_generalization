@@ -297,9 +297,17 @@ class WeightedAsymmetricLoss(nn.Module):
             # The fsrt images should not use AUs: 4,7, and 24.
             self.bp4d_fsrt_indicies = [0,1,3,6,7,8,9,10,11]
             self.disfa_fsrt_indicies = [0,1,3,5,7,13,14]
+            if self.weight is not None:
+                if self.weight.shape[0] == 12:
+                    self.weight_limit_fsrt = self.weight[[0,1,3,5,6,7,8,9,10]]
+                elif self.weight.shape[0] == 8:
+                    self.weight_limit_fsrt = self.weight[[0,1,3,4,5,6,7]]
+            else:
+                self.weight_limit_fsrt = None
         else:
             self.bp4d_fsrt_indicies = self.bp4d_indicies
             self.disfa_fsrt_indicies = self.disfa_indicies
+            self.weight_limit_fsrt = self.weight
 
         self.smoothing = smoothing
 
@@ -309,15 +317,19 @@ class WeightedAsymmetricLoss(nn.Module):
         if self.dataset == "bp4d" and not is_fsrt:
             x = x[:, self.bp4d_indicies]
             y = y[:, self.bp4d_indicies]
+            weight = self.weight
         elif self.dataset == "bp4d" and is_fsrt:
             x = x[:, self.bp4d_fsrt_indicies]
             y = y[:, self.bp4d_fsrt_indicies]
+            weight = self.weight_limit_fsrt
         elif self.dataset == "disfa" and not is_fsrt:
             x = x[:, self.disfa_indicies]
             y = y[:, self.disfa_indicies]
+            weight = self.weight
         elif self.dataset == "disfa" and is_fsrt:
             x = x[:, self.disfa_fsrt_indicies]
             y = y[:, self.disfa_fsrt_indicies]
+            weight = self.weight_limit_fsrt
 
         if self.smoothing > 0:
             x[x<self.smoothing] = 0.0
@@ -338,8 +350,8 @@ class WeightedAsymmetricLoss(nn.Module):
             torch.set_grad_enabled(True)
         loss = los_pos + neg_weight * los_neg
 
-        if self.weight is not None:
-            loss = loss * self.weight.view(1,-1)
+        if weight is not None:
+            loss = loss * weight.view(1,-1)
 
         loss = loss.mean(dim=-1)
         return -loss.mean()
