@@ -38,7 +38,8 @@ class RunFRST:
         if conf.fsrt_vox == 1:
             self.all_sources = list(glob.glob("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_new/*.jpg"))
         elif conf.fsrt_vox == 2:
-            self.all_sources = list(glob.glob("/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_train_best_frames_mtcnn_new/*.jpg"))
+            # self.all_sources = list(glob.glob("/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_train_best_frames_mtcnn_new/*.jpg"))
+            self.all_sources = list(glob.glob("/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_all_train_best_frames_mtcnn_new/*.jpg"))
         else:
             raise Exception("fsrt_vox must be 1 or 2")
         # Shuffle the source images to ensure variety
