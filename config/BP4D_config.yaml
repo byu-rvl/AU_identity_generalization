@@ -1,4 +1,4 @@
 dataset_path: /fslhome/andreww9/code/original_datasets/BP4D_croppped_MTCNN
-# dataset_path: /home/andreww9/groups/grp_face_race/nobackup/autodelete/BP4D_croppped_MTCNN_edges
+fsrt_dataset_path: /home/andreww9/groups/grp_RVL_AU/nobackup/archive/dataset/fsrt_computed_imgs_zipped
 num_classes: 12
 neighbor_num: 4

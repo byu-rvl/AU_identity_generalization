@@ -1,4 +1,6 @@
 bp4d_dataset_path: /fslhome/andreww9/code/original_datasets/BP4D_croppped_MTCNN
 disfa_dataset_path: /home/andreww9/fsl_groups/grp_RVL_AU/code/DISFA_LEFT_cropped_MTCNN
+fsrt_dataset_path: /home/andreww9/groups/grp_RVL_AU/nobackup/archive/dataset/fsrt_computed_imgs_zipped_old
+fsrt_dataset_path: /home/andreww9/groups/grp_RVL_AU/nobackup/archive/dataset/fsrt_computed_imgs_zipped_old
 num_classes: 15 # 12 in BP4D, 8 in DISFA: 5 in both.
 neighbor_num: 4

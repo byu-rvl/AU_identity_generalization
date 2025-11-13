@@ -126,6 +126,15 @@ def get_config():
         raise Exception("Unkown Datsets:",cfg.dataset)
 
     cfg.update(datasets_cfg)
+
+    if "dataset_path" in cfg:
+        if cfg.dataset == "BP4D":
+            cfg.dataset_path = f"/tmp/{cfg.jobID}/bp4d_data/BP4D_croppped_MTCNN"
+        elif cfg.dataset == "DISFA":
+            cfg.dataset_path = f"/tmp/{cfg.jobID}/disfa_data/DISFA_LEFT_cropped_MTCNN"
+    elif "bp4d_dataset_path" in cfg and "disfa_dataset_path" in cfg:
+        cfg.bp4d_dataset_path = f"/tmp/{cfg.jobID}/bp4d_data/BP4D_croppped_MTCNN"
+        cfg.disfa_dataset_path = f"/tmp/{cfg.jobID}/disfa_data/DISFA_LEFT_cropped_MTCNN"
     return cfg
 
 

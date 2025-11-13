@@ -14,48 +14,86 @@ from dataset import *
 from utils import *
 from conf import get_config,set_logger,set_outdir,set_env
 
+from pathlib import Path
+import tarfile
+import shutil
+
 def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
-def get_dataloader(conf):
+def untar_fsrt_data(tar_path, extract_path):
+    Path(extract_path).mkdir(parents=True, exist_ok=True)
+    # untar the tar file to /tmp/{jobID}/fsrt_data/epoch_{epoch}/
+    with tarfile.open(tar_path, "r:gz") as tar:
+        tar.extractall(path=extract_path)
+    print("Extracted FSRT data to:", extract_path)
+
+def get_train_dataloader(conf, epoch):
+    epoch = int(epoch) + 1 # for zero indexing.
+
+    un_tar_path = f"/tmp/{conf.jobID}/prep_fsrt/epoch{epoch}"
+
+    # Delete previous epoch's extracted data to save space
+    delete_tar_path = f"/tmp/{conf.jobID}/prep_fsrt/epoch{epoch-1}"
+    if os.path.exists(delete_tar_path):
+        shutil.rmtree(delete_tar_path)
+        print("Deleted previous epoch's extracted FSRT data at:", delete_tar_path)
+
     print('==> Preparing data...')
+    from_bp4d = f"{conf.fsrt_dataset_path}/BP4D_epoch{epoch}.tar.gz"
+    to_bp4d = f"{un_tar_path}/BP4D_epoch{epoch}"
+    from_disfa = f"{conf.fsrt_dataset_path}/DISFA_epoch{epoch}.tar.gz"
+    to_disfa = f"{un_tar_path}/DISFA_epoch{epoch}"
     if conf.dataset == 'BP4D':
-        trainset = BP4D(conf.dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf)
+        untar_fsrt_data(from_bp4d, to_bp4d)
+        trainset = BP4D(conf.dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf, epoch=epoch, fsrt_dataset_path=to_bp4d)
         train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers, worker_init_fn=seed_worker)
-        valset = BP4D(conf.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
-        val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers, worker_init_fn=seed_worker)
 
     elif conf.dataset == 'DISFA':
-        trainset = DISFA(conf.dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf)
+        untar_fsrt_data(from_disfa, to_disfa)
+        trainset = DISFA(conf.dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf, epoch=epoch, fsrt_dataset_path=to_disfa)
         train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers, worker_init_fn=seed_worker)
-        valset = DISFA(conf.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
-        val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers, worker_init_fn=seed_worker)
 
     elif conf.dataset == 'FEC':
         trainset = FEC(conf.dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 2, conf=conf)
         train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers, drop_last=True, worker_init_fn=seed_worker)
+
+    elif conf.dataset == 'both':
+        untar_fsrt_data(from_bp4d, to_bp4d)
+        untar_fsrt_data(from_disfa, to_disfa)
+        bp4d_trainset = BothDatasets(do_dataset="bp4d", root_path_bp4d=conf.bp4d_dataset_path, root_path_disfa=conf.disfa_dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf, epoch=epoch, fsrt_dataset_path=to_bp4d)
+        bp4d_trainloader = DataLoader(bp4d_trainset, batch_size=conf.batch_size//2, shuffle=True, num_workers=conf.num_workers, worker_init_fn=seed_worker)
+        disfa_trainset = BothDatasets(do_dataset="disfa", root_path_bp4d=conf.bp4d_dataset_path, root_path_disfa=conf.disfa_dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf, epoch=epoch, fsrt_dataset_path=to_disfa)
+        disfa_trainloader = DataLoader(disfa_trainset, batch_size=conf.batch_size//2, shuffle=True, num_workers=conf.num_workers, worker_init_fn=seed_worker)
+        train_loader = CombinedDataLoader(bp4d_trainloader, disfa_trainloader)
+
+    return train_loader
+
+def get_dataloader(conf):
+    print('==> Preparing data...')
+    if conf.dataset == 'BP4D':
+        valset = BP4D(conf.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
+        val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers, worker_init_fn=seed_worker)
+
+    elif conf.dataset == 'DISFA':
+        valset = DISFA(conf.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
+        val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers, worker_init_fn=seed_worker)
+
+    elif conf.dataset == 'FEC':
         valset = FEC(conf.dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 2, conf=conf)
         val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers, worker_init_fn=seed_worker)
 
     elif conf.dataset == 'both':
-        bp4d_trainset = BothDatasets(do_dataset="bp4d", root_path_bp4d=conf.bp4d_dataset_path, root_path_disfa=conf.disfa_dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf)
-        bp4d_trainloader = DataLoader(bp4d_trainset, batch_size=conf.batch_size//2, shuffle=True, num_workers=conf.num_workers, worker_init_fn=seed_worker)
-        disfa_trainset = BothDatasets(do_dataset="disfa", root_path_bp4d=conf.bp4d_dataset_path, root_path_disfa=conf.disfa_dataset_path, train=True, fold = conf.fold, transform=image_train(crop_size=conf.crop_size), crop_size=conf.crop_size, stage = 1, conf=conf)
-        disfa_trainloader = DataLoader(disfa_trainset, batch_size=conf.batch_size//2, shuffle=True, num_workers=conf.num_workers, worker_init_fn=seed_worker)
-        train_loader = CombinedDataLoader(bp4d_trainloader, disfa_trainloader)
-        # train_loader = DataLoader(trainset, batch_size=conf.batch_size, shuffle=True, num_workers=conf.num_workers)
         bp4d_valset = BothDatasets(do_dataset="bp4d", root_path_bp4d=conf.bp4d_dataset_path, root_path_disfa=conf.disfa_dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
         disfa_valset = BothDatasets(do_dataset="disfa", root_path_bp4d=conf.bp4d_dataset_path, root_path_disfa=conf.disfa_dataset_path, train=False, fold=conf.fold, transform=image_test(crop_size=conf.crop_size), stage = 1, conf=conf)
         bp4d_valloader = DataLoader(bp4d_valset, batch_size=conf.batch_size//2, shuffle=False, num_workers=conf.num_workers, worker_init_fn=seed_worker)
         disfa_valloader = DataLoader(disfa_valset, batch_size=conf.batch_size//2, shuffle=False, num_workers=conf.num_workers, worker_init_fn=seed_worker)
         val_loader = CombinedDataLoader(bp4d_valloader, disfa_valloader)
-        # val_loader = DataLoader(valset, batch_size=conf.batch_size, shuffle=False, num_workers=conf.num_workers)
-        trainset = bp4d_trainset + disfa_trainset
         valset = bp4d_valset + disfa_valset
 
-    return train_loader, val_loader, len(trainset), len(valset)
+    return val_loader, len(valset)
 
 def train_FEC(conf, net, train_loader, optimizer, epoch, criterion):
     losses = AverageMeter()
@@ -111,12 +149,14 @@ def val_FEC(net, val_loader, criterion):
     return losses.avg, mean_acc
 
 # Train
-def train(conf,net,train_loader,optimizer,epoch,criterion):
+def train(conf,net,optimizer,epoch,criterion):
     losses = AverageMeter()
     losses1 = AverageMeter()
     losses2 = AverageMeter()
     losses3 = AverageMeter()
     net.train()
+
+    train_loader = get_train_dataloader(conf, epoch)
     train_loader_len = len(train_loader)
 
     translate_every_other = False
@@ -124,16 +164,15 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
     for batch_idx, data in enumerate(tqdm(train_loader)):
         if conf.dataset == "both":
             data, dataset_flags = data    
-        if conf.proportion_with_frst != -1.0:
-            inputs,  targets, relations, lmk_true = data
-        else:
-            inputs, aug_inputs, targets, relations, lmk_true = data
-            fsrt_batch_size = inputs.shape[0]
-            # concatente inputs and aug_inputs in the batch dimension
-            inputs = torch.cat((inputs, aug_inputs), 0)
-            # targets = torch.cat((targets, targets), 0)
-            # relations = torch.cat((relations, relations), 0)
-            # lmk_true = torch.cat((lmk_true, lmk_true), 0)
+        
+        inputs, aug_inputs, targets, relations, lmk_true = data
+        fsrt_batch_size = inputs.shape[0]
+        # concatente inputs and aug_inputs in the batch dimension
+        inputs = torch.cat((inputs, aug_inputs), 0)
+        # targets = torch.cat((targets, targets), 0)
+        # relations = torch.cat((relations, relations), 0)
+        # lmk_true = torch.cat((lmk_true, lmk_true), 0)
+
         adjust_learning_rate(optimizer, epoch, conf.epochs, conf.learning_rate, batch_idx, train_loader_len)
         targets = targets.float()
         lmk_true = lmk_true.float()
@@ -141,54 +180,45 @@ def train(conf,net,train_loader,optimizer,epoch,criterion):
             inputs, targets, relations, lmk_true = inputs.cuda(), targets.cuda(), relations.cuda(), lmk_true.cuda()
         optimizer.zero_grad()
         outputs, outputs_relation, emb_out, lmk_out = net(inputs)
+        
         if conf.dataset == "both" and dataset_flags == "bp4d":
-            if conf.proportion_with_frst != -1.0:
-                loss = criterion[0]["bp4d"](outputs, targets)
-            else:
-                normal_outputs = outputs[:fsrt_batch_size]
-                fsrt_outputs = outputs[fsrt_batch_size:]
-                loss_normal = criterion[0]["bp4d"](normal_outputs, targets, is_fsrt=False)
-                loss_fsrt = criterion[0]["bp4d"](fsrt_outputs, targets, is_fsrt=True)
-                loss = loss_normal + loss_fsrt
+            normal_outputs = outputs[:fsrt_batch_size]
+            fsrt_outputs = outputs[fsrt_batch_size:]
+            loss_normal = criterion[0]["bp4d"](normal_outputs, targets, is_fsrt=False)
+            loss_fsrt = criterion[0]["bp4d"](fsrt_outputs, targets, is_fsrt=True)
+            loss = loss_normal + loss_fsrt
         elif conf.dataset == "both" and dataset_flags == "disfa":
-            if conf.proportion_with_frst != -1.0:
-                loss = criterion[0]["disfa"](outputs, targets)
-            else:
-                normal_outputs = outputs[:fsrt_batch_size]
-                fsrt_outputs = outputs[fsrt_batch_size:]
-                loss_normal = criterion[0]["disfa"](normal_outputs, targets, is_fsrt=False)
-                loss_fsrt = criterion[0]["disfa"](fsrt_outputs, targets, is_fsrt=True)
-                loss = loss_normal + loss_fsrt
-        elif conf.proportion_with_frst != 0.0:
-            if conf.proportion_with_frst == 1.0:
-                loss = criterion[0](outputs, targets)
-            else:
-                normal_outputs = outputs[:fsrt_batch_size]
-                fsrt_outputs = outputs[fsrt_batch_size:]
-                loss_normal = criterion[0](normal_outputs, targets, is_fsrt=False)
-                loss_fsrt = criterion[0](fsrt_outputs, targets, is_fsrt=True)
-                loss = loss_normal + loss_fsrt
+            normal_outputs = outputs[:fsrt_batch_size]
+            fsrt_outputs = outputs[fsrt_batch_size:]
+            loss_normal = criterion[0]["disfa"](normal_outputs, targets, is_fsrt=False)
+            loss_fsrt = criterion[0]["disfa"](fsrt_outputs, targets, is_fsrt=True)
+            loss = loss_normal + loss_fsrt
         else:
-            loss = criterion[0](outputs, targets)
-        if conf.proportion_with_frst == -1.0:
-            output_relations_normal = outputs_relation[:fsrt_batch_size]
-            output_relations_fsrt = outputs_relation[fsrt_batch_size:]
+            normal_outputs = outputs[:fsrt_batch_size]
+            fsrt_outputs = outputs[fsrt_batch_size:]
+            loss_normal = criterion[0](normal_outputs, targets, is_fsrt=False)
+            loss_fsrt = criterion[0](fsrt_outputs, targets, is_fsrt=True)
+            loss = loss_normal + loss_fsrt
+        
+        output_relations_normal = outputs_relation[:fsrt_batch_size]
+        output_relations_fsrt = outputs_relation[fsrt_batch_size:]
 
-            # edge_loss_normal = criterion[1](output_relations_normal.view(-1,4), relations.view(-1).long())
-            # edge_loss_fsrt = criterion[1](output_relations_fsrt.view(-1,4), relations.view(-1).long())
-            # edge_loss = edge_loss_normal + edge_loss_fsrt
-            contrasitive_loss_normal = criterion[2](emb_out[:fsrt_batch_size], targets)
-            contrasitive_loss_fsrt = criterion[2](emb_out[fsrt_batch_size:], targets)
-            contrasitive_loss = contrasitive_loss_normal + contrasitive_loss_fsrt
+        # edge_loss_normal = criterion[1](output_relations_normal.view(-1,4), relations.view(-1).long())
+        # edge_loss_fsrt = criterion[1](output_relations_fsrt.view(-1,4), relations.view(-1).long())
+        # edge_loss = edge_loss_normal + edge_loss_fsrt
+        contrasitive_loss_normal = criterion[2](emb_out[:fsrt_batch_size], targets)
+        contrasitive_loss_fsrt = criterion[2](emb_out[fsrt_batch_size:], targets)
+        contrasitive_loss = contrasitive_loss_normal + contrasitive_loss_fsrt
 
-            loss = loss + conf.lam_contrasitive * contrasitive_loss
+        loss = loss + conf.lam_contrasitive * contrasitive_loss
 
 
-            # edge_loss = criterion[1](outputs_relation.view(-1,4), relations.view(-1).long())
-            # edge_loss = criterion[1](outputs_relation.view(-1,4), relations.view(-1).long())
-            # contrasitive_loss = criterion[2](emb_out, targets)
-            # lmk_loss = criterion[3](lmk_out.float(), lmk_true)
-            # loss = wa_loss + conf.lam_edge * edge_loss + conf.lam_contrasitive * contrasitive_loss + conf.lam_lmk * lmk_loss
+        # edge_loss = criterion[1](outputs_relation.view(-1,4), relations.view(-1).long())
+        # edge_loss = criterion[1](outputs_relation.view(-1,4), relations.view(-1).long())
+        # contrasitive_loss = criterion[2](emb_out, targets)
+        # lmk_loss = criterion[3](lmk_out.float(), lmk_true)
+        # loss = wa_loss + conf.lam_edge * edge_loss + conf.lam_contrasitive * contrasitive_loss + conf.lam_lmk * lmk_loss
+        
         loss.backward()
         optimizer.step()
         losses.update(loss.data.item(), inputs.size(0))
@@ -264,7 +294,7 @@ def main(conf):
 
     start_epoch = 0
     # data
-    train_loader,val_loader,train_data_num,val_data_num = get_dataloader(conf)
+    val_loader,val_data_num = get_dataloader(conf)
     if conf.dataset != "FEC":
         if conf.dataset == 'both':
             bp4d_class_totals = np.loadtxt('/fslhome/andreww9/code/original_datasets/BP4D_croppped_MTCNN/list/BP4D_class_totals_fold'+str(conf.fold)+'.txt')
@@ -345,7 +375,7 @@ def main(conf):
                     .format(epoch + 1, train_loss, val_loss, 100.* val_mean_acc)}
             logging.info(infostr)
         else:
-            train_loss, wa_loss, edge_loss, lmk_loss = train(conf,net,train_loader,optimizer,epoch,criterion)
+            train_loss, wa_loss, edge_loss, lmk_loss = train(conf,net,optimizer,epoch,criterion)
             val_loss, val_mean_f1_score, val_f1_score, val_mean_acc, val_acc = val(net, val_loader, criterion)
 
             # log

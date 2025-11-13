@@ -125,7 +125,7 @@ class FEC(Dataset):
         return len(self.allInfo_images)
 
 class BP4D(Dataset):
-    def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader, conf=None):
+    def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader, conf=None, epoch=None, fsrt_dataset_path=None):
 
         assert (fold>0 and fold <=3) or (fold == -1), 'The fold num must be restricted from 1 to 3'
         assert stage>0 and stage <=2, 'The stage num must be restricted from 1 to 2'
@@ -183,34 +183,33 @@ class BP4D(Dataset):
         else:
             self.do_clahe = False
         self.conf = conf
+        self.epoch = epoch
+        if fsrt_dataset_path is not None:
+            self.fsrt_dataset_path = fsrt_dataset_path + "/BP4D_epoch" + str(epoch) + "/"
 
     def __getitem__(self, index):
         if self._train:
-            img, label, au_relation, landmark_path = self.data_list[index]
+            img_path, label, au_relation, landmark_path = self.data_list[index]
 
-            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
+            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img_path)), (256, 256))[..., :3])
+            
+            if self.proportion_with_frst == -1.0 or random.random() < self.proportion_with_frst:
+                # aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, img_path)), (256, 256))[..., :3])
+                aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, "F007/T1/644.jpg")), (256, 256))[..., :3])
+            else:
+                aug_img = img
+            
+
             if self.do_clahe and self.clahe_processor is None:
                 self.clahe_processor = RunCLAHE()
-            if self.preprocessing is None and (self.proportion_with_frst > 0.0 or self.proportion_with_frst == -1.0):
-                self.preprocessing = RunFRST(self.conf)
+
             if self.do_clahe:
                 img = self.clahe_processor.run_clahe(img)
-            if random.random() < self.proportion_with_frst:
-                img = self.preprocessing.run_fsrt(img, index)[0]
-                if self.do_clahe:
-                    img = self.clahe_processor.run_clahe(img.numpy())
-                else:
-                    # When I don't have the run_clahe, I need to reshape to C, H, W
-                    img = np.transpose(img, (2, 0, 1))
-            elif self.proportion_with_frst == -1.0:
-                aug_img = self.preprocessing.run_fsrt(img, index)[0]
-                if self.do_clahe:
-                    aug_img = self.clahe_processor.run_clahe(aug_img.numpy())
-                else:
-                    # When I don't have the run_clahe, I need to reshape to C, H, W
-                    aug_img = np.transpose(aug_img, (2, 0, 1))
-                aug_img = self.to_pil(aug_img)
+                aug_img = self.clahe_processor.run_clahe(aug_img)
+
             img = self.to_pil(img)
+            aug_img = self.to_pil(aug_img)
+            
             # Save image for debugging
             # img.save(f"debug/debug_img_{index}.jpg")
             if self._transform is not None: 
@@ -219,15 +218,11 @@ class BP4D(Dataset):
                 offset_x = random.randint(0, w - self.crop_size)
                 flip = random.randint(0, 1)
                 img = self._transform(img, flip, offset_x, offset_y)
-                if self.proportion_with_frst == -1.0:
-                    aug_img = self._transform(aug_img, flip, offset_x, offset_y)
+                aug_img = self._transform(aug_img, flip, offset_x, offset_y)
 
             landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
 
-            if self.proportion_with_frst == -1.0:
-                return img, aug_img, label, au_relation, landmark
-            else:
-                return img, label, au_relation, landmark
+            return img, aug_img, label, au_relation, landmark
         else:
             img, label = self.data_list[index]
             
@@ -257,7 +252,7 @@ class BP4D(Dataset):
 
 
 class DISFA(Dataset):
-    def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader, conf=None):
+    def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader, conf=None, epoch=None, fsrt_dataset_path=None):
 
         assert fold>0 and fold <=3, 'The fold num must be restricted from 1 to 3'
         assert stage>0 and stage <=2, 'The stage num must be restricted from 1 to 2'
@@ -303,34 +298,33 @@ class DISFA(Dataset):
         else:
             self.do_clahe = False
         self.conf = conf
-            
+        self.epoch = epoch
+        if fsrt_dataset_path is not None:
+            self.fsrt_dataset_path = fsrt_dataset_path + "/DISFA_epoch" + str(epoch) + "/"
+
     def __getitem__(self, index):
         if self._train:
-            img, label, au_relation, landmark_path = self.data_list[index]
+            img_path, label, au_relation, landmark_path = self.data_list[index]
 
-            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
+            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img_path)), (256, 256))[..., :3])
+             
+            if self.proportion_with_frst == -1.0 or random.random() < self.proportion_with_frst:
+                # aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, img_path)), (256, 256))[..., :3])
+                aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, "SN003/0.png")), (256, 256))[..., :3])
+            else:
+                aug_img = img
+            
+
             if self.do_clahe and self.clahe_processor is None:
                 self.clahe_processor = RunCLAHE()
-            if self.preprocessing is None and (self.proportion_with_frst > 0.0 or self.proportion_with_frst == -1.0):
-                self.preprocessing = RunFRST(self.conf)
+
             if self.do_clahe:
                 img = self.clahe_processor.run_clahe(img)
-            if random.random() < self.proportion_with_frst:
-                img = self.preprocessing.run_fsrt(img, index)[0]
-                if self.do_clahe:
-                    img = self.clahe_processor.run_clahe(img.numpy())
-                else:
-                    # When I don't have the run_clahe, I need to reshape to C, H, W
-                    img = np.transpose(img, (2, 0, 1))
-            elif self.proportion_with_frst == -1.0:
-                aug_img = self.preprocessing.run_fsrt(img, index)[0]
-                if self.do_clahe:
-                    aug_img = self.clahe_processor.run_clahe(aug_img.numpy())
-                else:
-                    # When I don't have the run_clahe, I need to reshape to C, H, W
-                    aug_img = np.transpose(aug_img, (2, 0, 1))
-                aug_img = self.to_pil(aug_img)
+                aug_img = self.clahe_processor.run_clahe(aug_img)
+
             img = self.to_pil(img)
+            aug_img = self.to_pil(aug_img)
+
             # Save image for debugging
             # img.save(f"debug/debug_img_{index}.jpg")
             if self._transform is not None: 
@@ -344,10 +338,7 @@ class DISFA(Dataset):
             
             landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
 
-            if self.proportion_with_frst == -1.0:
-                return img, aug_img, label, au_relation, landmark
-            else:
-                return img, label, au_relation, landmark
+            return img, aug_img, label, au_relation, landmark
         else:
             img, label = self.data_list[index]
             
@@ -376,16 +367,17 @@ class DISFA(Dataset):
         return len(self.data_list)
 
 class BothDatasets(Dataset):
-    def __init__(self, root_path_bp4d, root_path_disfa, train=True, fold=1, transform=None, crop_size=224, stage=1, loader=default_loader, conf=None, do_dataset=None):
+    def __init__(self, root_path_bp4d, root_path_disfa, train=True, fold=1, transform=None, crop_size=224, stage=1, loader=default_loader, conf=None, do_dataset=None, epoch=None, fsrt_dataset_path=None):
         self.do_dataset = do_dataset
         if do_dataset == "bp4d":
-            self.bp4d_dataset = BP4D(root_path_bp4d, train, fold, transform, crop_size, stage, loader, conf)
+            self.bp4d_dataset = BP4D(root_path_bp4d, train, fold, transform, crop_size, stage, loader, conf, epoch, fsrt_dataset_path)
         elif do_dataset == "disfa":
-            self.disfa_dataset = DISFA(root_path_disfa, train, fold, transform, crop_size, stage, loader, conf)
+            self.disfa_dataset = DISFA(root_path_disfa, train, fold, transform, crop_size, stage, loader, conf, epoch, fsrt_dataset_path)
         else:
             raise Exception("do_dataset must be 'bp4d' or 'disfa'")
         self.train = train
         self.proportion_with_frst = conf.proportion_with_frst
+        self.epoch = epoch
 
     def __getitem__(self, index):
         # FACS name BP4D DISFA
@@ -406,10 +398,8 @@ class BothDatasets(Dataset):
         # 26 Jaw drop ✗ ✓
 
         if self.do_dataset == "bp4d":
-            if self.train and self.proportion_with_frst == -1.0:
+            if self.train:
                 img, aug_img, label, au_relation, landmark = self.bp4d_dataset[index]
-            elif self.train:
-                img, label, au_relation, landmark = self.bp4d_dataset[index]
             else:
                 img, label = self.bp4d_dataset[index]
             # Map BP4D labels to combined labels
@@ -427,17 +417,13 @@ class BothDatasets(Dataset):
             combined_label[11] = label[10]  # AU23
             combined_label[12] = label[11]  # AU24
 
-            if self.train and self.proportion_with_frst == -1.0:
+            if self.train:
                 return img, aug_img, combined_label, au_relation, landmark
-            elif self.train:
-                return img, combined_label, au_relation, landmark
             else:
                 return img, combined_label
         elif self.do_dataset == "disfa":
-            if self.train and self.proportion_with_frst == -1.0:
+            if self.train:
                 img, aug_img, label, au_relation, landmark = self.disfa_dataset[index]
-            elif self.train:
-                img, label, au_relation, landmark = self.disfa_dataset[index]
             else:
                 img, label = self.disfa_dataset[index]
             # Map DISFA labels to combined labels
@@ -451,10 +437,8 @@ class BothDatasets(Dataset):
             combined_label[13] = label[6]  # AU25
             combined_label[14] = label[7]  # AU26 
 
-            if self.train and self.proportion_with_frst == -1.0:
+            if self.train:
                 return img, aug_img, combined_label, au_relation, landmark
-            elif self.train:
-                return img, combined_label, au_relation, landmark
             else:
                 return img, combined_label
         else:

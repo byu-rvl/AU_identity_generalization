@@ -99,6 +99,7 @@ def val(net,val_loader):
                 update_list = statistics(outputs_overlap, targets_overlap.detach(), 0.5)
                 statistics_list_overlap = update_statistics_list(statistics_list_overlap, update_list)
             else:
+                print("conf.dataset:", conf.dataset, "conf.eval_dataset:", conf.eval_dataset)
                 raise Exception("Cross-dataset statistics not defined for these datasets.")
             
     if statistics_list is not None:
