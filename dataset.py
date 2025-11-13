@@ -197,7 +197,7 @@ class BP4D(Dataset):
                 # aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, img_path)), (256, 256))[..., :3])
                 aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, "F007/T1/644.jpg")), (256, 256))[..., :3])
             else:
-                aug_img = img
+                aug_img = img.copy()
             
 
             if self.do_clahe and self.clahe_processor is None:
@@ -312,7 +312,7 @@ class DISFA(Dataset):
                 # aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, img_path)), (256, 256))[..., :3])
                 aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, "SN003/0.png")), (256, 256))[..., :3])
             else:
-                aug_img = img
+                aug_img = img.copy()
             
 
             if self.do_clahe and self.clahe_processor is None:
@@ -333,8 +333,7 @@ class DISFA(Dataset):
                 offset_x = random.randint(0, w - self.crop_size)
                 flip = random.randint(0, 1)
                 img = self._transform(img, flip, offset_x, offset_y)
-                if self.proportion_with_frst == -1.0:
-                    aug_img = self._transform(aug_img, flip, offset_x, offset_y)
+                aug_img = self._transform(aug_img, flip, offset_x, offset_y)
             
             landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
 
