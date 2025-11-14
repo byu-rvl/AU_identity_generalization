@@ -194,8 +194,7 @@ class BP4D(Dataset):
             img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img_path)), (256, 256))[..., :3])
             
             if self.proportion_with_frst == -1.0 or random.random() < self.proportion_with_frst:
-                # aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, img_path)), (256, 256))[..., :3])
-                aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, "F007/T1/644.jpg")), (256, 256))[..., :3])
+                aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, img_path)), (256, 256))[..., :3])
             else:
                 aug_img = img.copy()
             
@@ -309,8 +308,7 @@ class DISFA(Dataset):
             img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img_path)), (256, 256))[..., :3])
              
             if self.proportion_with_frst == -1.0 or random.random() < self.proportion_with_frst:
-                # aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, img_path)), (256, 256))[..., :3])
-                aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, "SN003/0.png")), (256, 256))[..., :3])
+                aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, img_path)), (256, 256))[..., :3])
             else:
                 aug_img = img.copy()
             
