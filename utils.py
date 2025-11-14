@@ -294,14 +294,14 @@ class WeightedAsymmetricLoss(nn.Module):
         self.disfa_indicies = [0,1,2,3,5,7,13,14]
 
         if limitFsrtLoss:
-            # The fsrt images should not use AUs: 4,7, and 24.
-            self.bp4d_fsrt_indicies = [0,1,3,6,7,8,9,10,11]
-            self.disfa_fsrt_indicies = [0,1,3,5,7,13,14]
+            # The fsrt images should not use AUs: 4 and 25.
+            self.bp4d_fsrt_indicies = [0,1,3,4,6,7,8,9,10,11,12]
+            self.disfa_fsrt_indicies = [0,1,3,5,7,14]
             if self.weight is not None:
                 if self.weight.shape[0] == 12:
-                    self.weight_limit_fsrt = self.weight[[0,1,3,5,6,7,8,9,10]]
+                    self.weight_limit_fsrt = self.weight[[0,1,3,4,5,6,7,8,9,10,11]]
                 elif self.weight.shape[0] == 8:
-                    self.weight_limit_fsrt = self.weight[[0,1,3,4,5,6,7]]
+                    self.weight_limit_fsrt = self.weight[[0,1,3,4,5,7]]
             else:
                 self.weight_limit_fsrt = None
         else:
