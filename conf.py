@@ -38,9 +38,9 @@ parser.add_argument('--arc', default='swin_transformer_base', type=str, choices=
 parser.add_argument('--metric', default="dots", type=str, choices=['dots', 'cosine', 'l1'], help="metric for graph top-K nearest neighbors selection")
 # When all losses are trained together with the same weight, these are the approximate magnitudes on the BP4D dataset:
 # main loss: ~228.0; edge loss: ~0.37; contrasitive loss: ~1.34; lmk loss: ~221.0
-parser.add_argument('--lam_edge', default=228.0/0.37*0.001, type=float, help="lambda for adjusting loss")
-parser.add_argument('--lam_contrasitive', default=228.0/1.34*0.001, type=float, help="lambda for adjusting loss")
-parser.add_argument('--lam_lmk', default=228.0/221.0*0.001, type=float, help="lambda for adjusting loss")
+parser.add_argument('--lam_edge', default=228.0/0.37*0.0001, type=float, help="lambda for adjusting loss")
+parser.add_argument('--lam_contrasitive', default=228.0/1.34*0.0001, type=float, help="lambda for adjusting loss")
+parser.add_argument('--lam_lmk', default=228.0/221.0*0.0001, type=float, help="lambda for adjusting loss")
 parser.add_argument('-n','--numEncoderLayers', default=2, type=int, help='number of encoder layers')
 
 # Device and Seed
@@ -52,7 +52,13 @@ parser.add_argument('--exp-name', default="Test", type=str, help="experiment nam
 parser.add_argument('--resume', default='', type=str, metavar='path', help='path to latest checkpoint (default: none)')
 parser.add_argument('--resume2', default='', type=str, metavar='path', help='path to latest checkpoint (default: none)')
 parser.add_argument('--doEnsemble', default='False', type=str, help='Whether to do ensemble')
-
+parser.add_argument('--proportion_with_frst', default=0.5, type=float, help='Proportion of samples in each batch that contain FRST augmentations')
+parser.add_argument('--do_clahe', action='store_true', help='Apply CLAHE to images')
+parser.add_argument('--fsrt_vox', default=2, type=int, help='1: use Voxceleb1 for FRST source images; 2: use Voxceleb2 for FRST source images')
+parser.add_argument('--eval_fsrt', action='store_true', help='Whether to apply FRST during evaluation')
+parser.add_argument('--agg', default='fast', type=str, choices=['fast', 'original'], help="type of AGG module to use")
+parser.add_argument('--smoothing', default=0.0, type=float, help="label smoothing value")
+parser.add_argument('--limitFsrtLoss', action='store_true', help='Whether to limit the FSRT loss to only those samples that have FRST applied')
 
 # ------------------------------
 
@@ -111,10 +117,24 @@ def get_config():
             datasets_cfg = yaml.safe_load(f)
             datasets_cfg = edict(datasets_cfg)
 
+    elif cfg.dataset == 'both':
+        with open('config/both_config.yaml', 'r') as f:
+            datasets_cfg = yaml.safe_load(f)
+            datasets_cfg = edict(datasets_cfg)
+
     else:
         raise Exception("Unkown Datsets:",cfg.dataset)
 
     cfg.update(datasets_cfg)
+
+    if "dataset_path" in cfg:
+        if cfg.dataset == "BP4D":
+            cfg.dataset_path = f"/tmp/{cfg.jobID}/bp4d_data/BP4D_croppped_MTCNN"
+        elif cfg.dataset == "DISFA":
+            cfg.dataset_path = f"/tmp/{cfg.jobID}/disfa_data/DISFA_LEFT_cropped_MTCNN"
+    elif "bp4d_dataset_path" in cfg and "disfa_dataset_path" in cfg:
+        cfg.bp4d_dataset_path = f"/tmp/{cfg.jobID}/bp4d_data/BP4D_croppped_MTCNN"
+        cfg.disfa_dataset_path = f"/tmp/{cfg.jobID}/disfa_data/DISFA_LEFT_cropped_MTCNN"
     return cfg
 
 
@@ -135,7 +155,8 @@ def set_env(cfg):
 
 
 def set_outdir(conf):
-    default_outdir = '/home/andreww9/compute/output/RVL_AU_OUT/results'
+    # default_outdir = '/home/andreww9/compute/output/RVL_AU_OUT/results'
+    default_outdir = '/home/andreww9/groups/grp_AU_storage/nobackup/autodelete/identity_results'
     # default_outdir = '/Users/drewsumsion/Desktop/research/datasets/saved/DISFA_/results'
     if 'timedir' in conf:
         timestr = datetime.now().strftime('%d-%m-%Y_%I_%M-%S_%p')

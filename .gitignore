@@ -1,4 +1,6 @@
 */__pycache__/*
+*/*/__pycache__/*
+*/*/*/__pycache__/*
 __pycache__/*
 *.mp4
 *.pt
@@ -6,3 +8,5 @@ __pycache__/*
 weights/*
 output/
 *.task
+debug*
+output_old/

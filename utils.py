@@ -36,6 +36,9 @@ def statistics(pred, y, thresh):
         FN = 0
         TN = 0
         for i in range(batch_size):
+            if y[i][j] == 9:  # ignore label, skip. This is the flag from the EBplus dataset when face is out of the frame.
+                continue
+
             if pred[i][j] == 1:
                 if y[i][j] == 1:
                     TP += 1
@@ -89,13 +92,26 @@ def calc_acc(statistics_list):
     return mean_acc_score, acc_list
 
 
-def update_statistics_list(old_list, new_list):
+def update_statistics_list(old_list, new_list, dataset_flag=None):
     if not old_list:
         return new_list
 
     assert len(old_list) == len(new_list)
 
-    for i in range(len(old_list)):
+    bp4d_indicies = [0,1,2,3,4,6,7,8,9,10,11,12]
+    disfa_indicies = [0,1,2,3,5,7,13,14]
+
+    if dataset_flag is None:
+        use_indicies = list(range(len(old_list)))
+    elif dataset_flag == "bp4d":
+        use_indicies = bp4d_indicies
+    elif dataset_flag == "disfa":
+        use_indicies = disfa_indicies
+    else:
+        raise ValueError("dataset_flag must be None, 'bp4d', or 'disfa'")
+
+    # for i in range(len(old_list)):
+    for i in use_indicies:
         old_list[i]['TP'] += new_list[i]['TP']
         old_list[i]['FP'] += new_list[i]['FP']
         old_list[i]['TN'] += new_list[i]['TN']
@@ -103,6 +119,29 @@ def update_statistics_list(old_list, new_list):
 
     return old_list
 
+def update_statistics_list_FEC(statistics_list, outputs, label):
+    diff_first_second = torch.norm(outputs[:,0,:] - outputs[:,1,:], p=2, dim=1)
+    diff_first_third = torch.norm(outputs[:,0,:] - outputs[:,2,:], p=2, dim=1)
+    diff_second_third = torch.norm(outputs[:,1,:] - outputs[:,2,:], p=2, dim=1)
+
+    combined = torch.cat((torch.unsqueeze(diff_second_third,1), torch.unsqueeze(diff_first_third,1), torch.unsqueeze(diff_second_third,1)), 1)
+    predictions = torch.argmin(combined, 1)
+
+    # add 1 to all prediction values so indexing is the same as the labels
+    predictions += 1
+
+    correct = predictions == label
+    incorrect = ~correct
+    num_correct = torch.sum(correct, dim=0)
+    num_incorrect = torch.sum(incorrect, dim=0)
+    total = num_correct + num_incorrect
+
+    
+    if statistics_list is None:
+        statistics_list = [num_correct, num_incorrect, total]
+    else:
+        statistics_list = [statistics_list[0] + num_correct, statistics_list[1] + num_incorrect, statistics_list[2] + total]
+    return statistics_list
 
 def BP4D_infolist(list):
     infostr = {'AU1: {:.2f} AU2: {:.2f} AU4: {:.2f} AU6: {:.2f} AU7: {:.2f} AU10: {:.2f} AU12: {:.2f} AU14: {:.2f} AU15: {:.2f} AU17: {:.2f} AU23: {:.2f} AU24: {:.2f} '.format(100.*list[0],100.*list[1],100.*list[2],100.*list[3],100.*list[4],100.*list[5],100.*list[6],100.*list[7],100.*list[8],100.*list[9],100.*list[10],100.*list[11])}
@@ -111,6 +150,20 @@ def BP4D_infolist(list):
 def DISFA_infolist(list):
     infostr = {'AU1: {:.2f} AU2: {:.2f} AU4: {:.2f}  AU6: {:.2f} AU9: {:.2f} AU12: {:.2f}  AU25: {:.2f} AU26: {:.2f} '.format(100.*list[0],100.*list[1],100.*list[2],100.*list[3],100.*list[4],100.*list[5],100.*list[6],100.*list[7])}
     return infostr
+
+def EBplus_infolist(list):
+    # list has AUs: 1,2,4,6,7,10,12,14,15,17,23,24, so 12 AUs
+    infostr = 'EBplus: AU1: {:.2f} AU2: {:.2f} AU4: {:.2f} AU6: {:.2f} AU7: {:.2f} AU10: {:.2f} AU12: {:.2f} AU14: {:.2f} AU15: {:.2f} AU17: {:.2f} AU23: {:.2f} AU24: {:.2f} '.format(100.*list[0],100.*list[1],100.*list[2],100.*list[3],100.*list[4],100.*list[5],100.*list[6],100.*list[7],100.*list[8],100.*list[9],100.*list[10],100.*list[11])
+    # BP4D AUs are 1, 2, 4, 6, 7, 10, 12, 14, 15, 17, 23, 24
+    # Overlapping AUs are 1, 2, 4, 6, 7, 10, 12, 14, 15, 17, 23, 24 (all BP4D are in EBplus)
+    infostr += "\nBP4D Overlap is the same as EBplus line above. "
+    # DISFA AUs are 1, 2, 4, 6, 9, 12, 25, 26
+    # Overlapping AUs are 1, 2, 4, 6, 12
+    disfa_indices_in_ebplus = [0,1,2,3,6]
+    infostr += '\nDISFA Overlap (same as 5 normal overlap): AU1: {:.2f} AU2: {:.2f} AU4: {:.2f} AU6: {:.2f} AU12: {:.2f} '.format(100.*list[0],100.*list[1],100.*list[2],100.*list[3],100.*list[6])
+    infostr += '\n(Note: EBplus does not have DISFA AUs 9, 25, 26). '
+    infostr += '\nThe cross 5 AU overlap average (AUs 1,2,4,6,12) F1 score between EBplus and DISFA is: {:.2f}'.format(100.*(sum([list[i] for i in disfa_indices_in_ebplus])/len(disfa_indices_in_ebplus)))
+    return {infostr}
 
 def overlap_infolist(list):
     infostr = {'AU1: {:.2f} AU2: {:.2f} AU4: {:.2f}  AU6: {:.2f} AU12: {:.2f} '.format(100.*list[0],100.*list[1],100.*list[2],100.*list[3],100.*list[4])}
@@ -230,13 +283,57 @@ def load_state_dict(model,path):
 
 
 class WeightedAsymmetricLoss(nn.Module):
-    def __init__(self, eps=1e-8, disable_torch_grad=True, weight=None):
+    def __init__(self, eps=1e-8, disable_torch_grad=True, weight=None, dataset=None, smoothing=0.0, limitFsrtLoss=False):
         super(WeightedAsymmetricLoss, self).__init__()
         self.disable_torch_grad = disable_torch_grad
         self.eps = eps
         self.weight = weight
+        self.dataset = dataset
 
-    def forward(self, x, y):
+        self.bp4d_indicies = [0,1,2,3,4,6,7,8,9,10,11,12]
+        self.disfa_indicies = [0,1,2,3,5,7,13,14]
+
+        if limitFsrtLoss:
+            # The fsrt images should not use AUs: 4 and 25.
+            self.bp4d_fsrt_indicies = [0,1,3,4,6,7,8,9,10,11,12]
+            self.disfa_fsrt_indicies = [0,1,3,5,7,14]
+            if self.weight is not None:
+                if self.weight.shape[0] == 12:
+                    self.weight_limit_fsrt = self.weight[[0,1,3,4,5,6,7,8,9,10,11]]
+                elif self.weight.shape[0] == 8:
+                    self.weight_limit_fsrt = self.weight[[0,1,3,4,5,7]]
+            else:
+                self.weight_limit_fsrt = None
+        else:
+            self.bp4d_fsrt_indicies = self.bp4d_indicies
+            self.disfa_fsrt_indicies = self.disfa_indicies
+            self.weight_limit_fsrt = self.weight
+
+        self.smoothing = smoothing
+
+    # def forward(self, x, y):
+    def forward(self, x, y, is_fsrt=False):
+
+        if self.dataset == "bp4d" and not is_fsrt:
+            x = x[:, self.bp4d_indicies]
+            y = y[:, self.bp4d_indicies]
+            weight = self.weight
+        elif self.dataset == "bp4d" and is_fsrt:
+            x = x[:, self.bp4d_fsrt_indicies]
+            y = y[:, self.bp4d_fsrt_indicies]
+            weight = self.weight_limit_fsrt
+        elif self.dataset == "disfa" and not is_fsrt:
+            x = x[:, self.disfa_indicies]
+            y = y[:, self.disfa_indicies]
+            weight = self.weight
+        elif self.dataset == "disfa" and is_fsrt:
+            x = x[:, self.disfa_fsrt_indicies]
+            y = y[:, self.disfa_fsrt_indicies]
+            weight = self.weight_limit_fsrt
+
+        if self.smoothing > 0:
+            x[x<self.smoothing] = 0.0
+            x[x>1-self.smoothing] = 1.0
 
         xs_pos = x
         xs_neg = 1 - x
@@ -253,8 +350,8 @@ class WeightedAsymmetricLoss(nn.Module):
             torch.set_grad_enabled(True)
         loss = los_pos + neg_weight * los_neg
 
-        if self.weight is not None:
-            loss = loss * self.weight.view(1,-1)
+        if weight is not None:
+            loss = loss * weight.view(1,-1)
 
         loss = loss.mean(dim=-1)
         return -loss.mean()
@@ -315,3 +412,53 @@ class TripleContrasitiveLoss(nn.Module):
 
         all_loss = loss_1 + loss_2 + loss_3
         return torch.sum(all_loss, dim=0)
+
+class CombinedDataLoader:
+    def __init__(self, dataloader1, dataloader2):
+        self.dataloader1 = dataloader1
+        self.dataloader2 = dataloader2
+
+    def __iter__(self):
+        self.iter1 = iter(self.dataloader1)
+        self.iter2 = iter(self.dataloader2)
+        self.iter1_exhausted = False
+        self.iter2_exhausted = False
+        self.use_bp4d_next = True
+        return self
+
+    def __next__(self):
+        if self.iter1_exhausted and self.iter2_exhausted:
+            raise StopIteration
+
+        # Determine which loader to use, preferring alternation
+        # but falling back to the non-exhausted one.
+        use_bp4d = (self.use_bp4d_next and not self.iter1_exhausted) or self.iter2_exhausted
+        
+        try:
+            if use_bp4d and not self.iter1_exhausted:
+                data = next(self.iter1)
+                dataset_flag = "bp4d"
+            elif not self.iter2_exhausted:
+                data = next(self.iter2)
+                dataset_flag = "disfa"
+            else:
+                # This case should not be hit due to the initial check, but as a safeguard:
+                raise StopIteration
+
+            # Alternate for the next call if both are still active
+            if not self.iter1_exhausted and not self.iter2_exhausted:
+                self.use_bp4d_next = not self.use_bp4d_next
+            
+            return data, dataset_flag
+
+        except StopIteration as e:
+            if use_bp4d:
+                self.iter1_exhausted = True
+            else:
+                self.iter2_exhausted = True
+            
+            # Retry getting the next batch from the other loader in the same call
+            return self.__next__()
+
+    def __len__(self):
+        return len(self.dataloader1) + len(self.dataloader2)

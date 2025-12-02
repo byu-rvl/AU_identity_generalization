@@ -1,0 +1,5 @@
+dataset_path: '/home/andreww9/code/original_datasets/FEC_dataset2'
+# num_classes: 12 # for pretraining BP4D
+# neighbor_num: 4 #for pretraining BP4D
+num_classes: 8 #for pretraining DISFA
+neighbor_num: 3 #for pretraining DISFA

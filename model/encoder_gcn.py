@@ -14,7 +14,7 @@ from .vision_transformer import load_vit_b_16, load_vit_b_32, load_vit_l_16, loa
 from .graph import create_e_matrix
 from .graph_edge_model import GEM
 from .basic_block import *
-from .AGG import AGG
+from .AGG import AGG, AGG_fast
 from .COAL import COAL
 
 
@@ -134,7 +134,7 @@ class GNN(nn.Module):
 
 
 class Head(nn.Module):
-    def __init__(self, in_channels, num_classes, numEncoderLayers, secondDimensionSize, numLandmarks):
+    def __init__(self, in_channels, num_classes, numEncoderLayers, secondDimensionSize, numLandmarks, conf):
         super(Head, self).__init__()
         # The head of network
         # Modules: 1. AGG
@@ -146,28 +146,63 @@ class Head(nn.Module):
         self.in_channels = in_channels
         self.num_classes = num_classes
         self.numLandmarks = numLandmarks
+        # head_embedding_dim = 48 # A small dimension for the head embedding. Divisible by num_classes for BP4D (12) and DISFA (8)
+        head_embedding_dim = num_classes
 
         # AGG module:
-        self.decrease_dim, self.positional_encoding, self.transformer_encoder = AGG(num_classes, in_channels, secondDimensionSize, numEncoderLayers).getAGG()
-
-        # GNN module:
-        self.gnn = GNN(self.in_channels, self.num_classes)
-
-        # COAL module:
-        self.sc, self.edge_fc, self.relu, self.emb_layer, self.lmk_layer1, self.lmk_layer2 = COAL(num_classes, in_channels, numLandmarks).getInfo()
+        if conf.agg == "fast":
+            self.change_dimension, self.positional_encoding, self.transformer_encoder, self.numberHeads = AGG_fast(num_classes, in_channels, secondDimensionSize, numEncoderLayers, head_embedding_dim).getAGG()
+            # GNN module:
+            self.gnn = GNN(head_embedding_dim, self.num_classes)
+            # COAL module:
+            self.sc, self.edge_fc, self.relu, self.emb_layer, self.lmk_layer1, self.lmk_layer2 = COAL(num_classes, head_embedding_dim, numLandmarks).getInfo()
+            self.agg_type = "fast"
+        elif conf.agg == "original":
+            self.decrease_dim, self.positional_encoding, self.transformer_encoder = AGG(num_classes, in_channels, secondDimensionSize, numEncoderLayers).getAGG()
+            # GNN module:
+            self.gnn = GNN(self.in_channels, self.num_classes)
+            # COAL module:
+            self.sc, self.edge_fc, self.relu, self.emb_layer, self.lmk_layer1, self.lmk_layer2 = COAL(num_classes, in_channels, numLandmarks).getInfo()
+            self.agg_type = "original"
+        else:
+            raise Exception("Error: wrong agg type: ", conf.agg)
 
         nn.init.xavier_uniform_(self.edge_fc.weight)
         nn.init.xavier_uniform_(self.sc)
 
     def forward(self, x):
 
-        #flatten x so that it keeps the first dimension, but the rest of it is flattened
-        x_flat = x.flatten(start_dim=1)
-        x_flat = self.decrease_dim(x_flat)
-        token_positions = []
-        for i, layer in enumerate(self.positional_encoding):
-            token_positions.append(layer(x_flat).unsqueeze(1))
-        token_positions = torch.cat(token_positions, dim=1)
+        if self.agg_type == "fast":
+            # Average pool x across the second dimension
+            x_flat = torch.mean(x, dim=1)
+            
+            x_flat = self.change_dimension(x_flat)
+            # [B, numberHeads * head_embedding_dim]
+            
+
+            # Reshape x_flat to be [B, numberHeads, head_embedding_dim]
+            x_flat = x_flat.view(-1, self.numberHeads, x_flat.shape[-1] // self.numberHeads)
+            
+
+            # Add the head embeddings to the input
+            head_indices = torch.arange(self.numberHeads, device=x.device).expand(x_flat.size(0), -1)
+            head_embeddings = self.positional_encoding(head_indices)
+            
+            # Add the positional encoding: 
+            token_positions = x_flat + head_embeddings
+            
+            # Normalize the token positions
+            token_positions = F.normalize(token_positions, p=2, dim=-1)
+        elif self.agg_type == "original":
+            #flatten x so that it keeps the first dimension, but the rest of it is flattened
+            x_flat = x.flatten(start_dim=1)
+            x_flat = self.decrease_dim(x_flat)
+            token_positions = []
+            for i, layer in enumerate(self.positional_encoding):
+                token_positions.append(layer(x_flat).unsqueeze(1))
+            token_positions = torch.cat(token_positions, dim=1)
+        else:
+            raise Exception("Error: wrong gnn_type: ", self.gnn_type)
 
         #make an encoder to pass the token_positions through
         token_positions = self.transformer_encoder(token_positions)
@@ -198,7 +233,7 @@ class Head(nn.Module):
 
 
 class MEFARG(nn.Module):
-    def __init__(self, num_classes=12, backbone='swin_transformer_base', numEncoderLayers=2, numLandmarks=None):
+    def __init__(self, num_classes=12, backbone='swin_transformer_base', numEncoderLayers=2, numLandmarks=None, conf=None):
         super(MEFARG, self).__init__()
         self.expand_dim = False
         self.useLogits = False
@@ -249,7 +284,7 @@ class MEFARG(nn.Module):
             self.out_channels += 1
         
         self.global_linear = LinearBlock(self.in_channels, self.out_channels)
-        self.head = Head(self.out_channels, num_classes, numEncoderLayers, self.secondDimensionSize, numLandmarks)
+        self.head = Head(self.out_channels, num_classes, numEncoderLayers, self.secondDimensionSize, numLandmarks, conf)
 
     def forward(self, x):
         

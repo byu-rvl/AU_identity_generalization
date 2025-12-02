@@ -1,3 +1,5 @@
+import cv2
+import glob
 import imageio
 from skimage.transform import resize
 import numpy as np
@@ -6,6 +8,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 import os
+import torch
 
 from third_party_helpers.access_fsrt import access_fsrt
 
@@ -28,7 +31,45 @@ def pil_loader(path):
 def default_loader(path):
     return pil_loader(path)
 
+class RunFRST:
+    def __init__(self, conf):
+        self.fsrt_model = access_fsrt(conf)
+        self.to_pil = transforms.ToPILImage()
+        if conf.fsrt_vox == 1:
+            self.all_sources = list(glob.glob("/home/andreww9/fsl_groups/grp_face_race/code/VoxCeleb1_train_best_frames_mtcnn_new/*.jpg"))
+        elif conf.fsrt_vox == 2:
+            # self.all_sources = list(glob.glob("/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_train_best_frames_mtcnn_new/*.jpg"))
+            self.all_sources = list(glob.glob("/home/andreww9/groups/grp_ensembleAU2/nobackup/autodelete/VoxCeleb2_all_train_best_frames_mtcnn_new/*.jpg"))
+        else:
+            raise Exception("fsrt_vox must be 1 or 2")
+        # Shuffle the source images to ensure variety
+        random.shuffle(self.all_sources)
+    
+    def run_fsrt(self, target_image, index):
+        if index > len(self.all_sources) - 1:
+            index = index % len(self.all_sources)
+        source_image = resize(imageio.imread(self.all_sources[index]), (256, 256))[..., :3]
+        with torch.no_grad():
+            output = self.fsrt_model.run_fsrt_list(np.array([source_image]), [target_image])
+        return output
 
+class RunCLAHE:
+    def __init__(self):
+        self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    
+    def run_clahe(self, target_image):
+        # Ensure the image is in uint8 format
+        target_image = (target_image * 255).astype(np.uint8)
+        
+        lab = cv2.cvtColor(target_image, cv2.COLOR_RGB2LAB)
+        l, a, b = cv2.split(lab)
+        cl = self.clahe.apply(l)
+        limg = cv2.merge((cl,a,b))
+        final = cv2.cvtColor(limg, cv2.COLOR_LAB2RGB)
+
+        # Normalize to [0, 1]
+        final = final.astype(np.float32) / 255.0
+        return final
 
 class FEC(Dataset):
     def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader, conf=None):
@@ -36,10 +77,10 @@ class FEC(Dataset):
         self._root_path = root_path
         self._train = train
         if train:
-            self.img_folder_path = "/home/andreww9/fsl_groups/grp_AU_storage/compute/FEC_dataset_downloader/train_images"
+            self.img_folder_path = "/home/andreww9/fsl_groups/grp_AU_storage/code/FEC_dataset_downloader/train_images"
             # self.img_folder_path = "/tmp/" + str(conf.jobID) + "/train_images"
         else:
-            self.img_folder_path = "/home/andreww9/fsl_groups/grp_AU_storage/compute/FEC_dataset_downloader/test_images"
+            self.img_folder_path = "/home/andreww9/fsl_groups/grp_AU_storage/code/FEC_dataset_downloader/test_images"
             # self.img_folder_path = "/tmp/" + str(conf.jobID) + "/test_images"
         self._transform = transform
         self.crop_size = crop_size
@@ -84,9 +125,9 @@ class FEC(Dataset):
         return len(self.allInfo_images)
 
 class BP4D(Dataset):
-    def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader):
+    def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader, conf=None, epoch=None, fsrt_dataset_path=None):
 
-        assert fold>0 and fold <=3, 'The fold num must be restricted from 1 to 3'
+        assert (fold>0 and fold <=3) or (fold == -1), 'The fold num must be restricted from 1 to 3'
         assert stage>0 and stage <=2, 'The stage num must be restricted from 1 to 2'
         self._root_path = root_path
         self._train = train
@@ -112,6 +153,18 @@ class BP4D(Dataset):
             au_relation_list_path = os.path.join(root_path, 'list', 'BP4D_train_AU_relation_fold' + str(fold) + '.txt')
             au_relation_list = np.loadtxt(au_relation_list_path)
             self.data_list = make_dataset(train_image_list, train_label_list, au_relation_list, train_landmark_list, train=self._train)
+        elif fold == -1:
+            all_data_list = []
+            for f in range(1,4):
+                # img
+                test_image_list_path = os.path.join(root_path, 'list', 'BP4D_test_img_path_fold' + str(f) + '.txt')
+                test_image_list = open(test_image_list_path).readlines()
+
+                # img labels
+                test_label_list_path = os.path.join(root_path, 'list', 'BP4D_test_label_fold' + str(f) + '.txt')
+                test_label_list = np.loadtxt(test_label_list_path)
+                all_data_list.extend(make_dataset(test_image_list, test_label_list, train=self._train))
+            self.data_list = all_data_list
         else:
             # img
             test_image_list_path = os.path.join(root_path, 'list', 'BP4D_test_img_path_fold' + str(fold) + '.txt')
@@ -121,31 +174,76 @@ class BP4D(Dataset):
             test_label_list_path = os.path.join(root_path, 'list', 'BP4D_test_label_fold' + str(fold) + '.txt')
             test_label_list = np.loadtxt(test_label_list_path)
             self.data_list = make_dataset(test_image_list, test_label_list, train=self._train)
-        self.fsrt_model = access_fsrt()
         self.to_pil = transforms.ToPILImage()
+        self.preprocessing = None
+        self.proportion_with_frst = conf.proportion_with_frst
+        if conf.do_clahe:
+            self.do_clahe = True
+            self.clahe_processor = None
+        else:
+            self.do_clahe = False
+        self.conf = conf
+        self.epoch = epoch
+        if fsrt_dataset_path is not None:
+            self.fsrt_dataset_path = fsrt_dataset_path + "/BP4D_epoch" + str(epoch) + "/"
 
     def __getitem__(self, index):
         if self._train:
-            img, label, au_relation, landmark_path = self.data_list[index]
+            img_path, label, au_relation, landmark_path = self.data_list[index]
 
-            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
-            landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
+            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img_path)), (256, 256))[..., :3])
+            
+            if self.proportion_with_frst == -1.0 or random.random() < self.proportion_with_frst:
+                aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, img_path)), (256, 256))[..., :3])
+            else:
+                aug_img = img.copy()
+            
 
-            return img, label, au_relation, landmark
-        else:
-            img, label = self.data_list[index]
-            img = self.loader(os.path.join(self.img_folder_path, img))
+            if self.do_clahe and self.clahe_processor is None:
+                self.clahe_processor = RunCLAHE()
 
-            if self._train:
+            if self.do_clahe:
+                img = self.clahe_processor.run_clahe(img)
+                aug_img = self.clahe_processor.run_clahe(aug_img)
+
+            img = self.to_pil(img)
+            aug_img = self.to_pil(aug_img)
+            
+            # Save image for debugging
+            # img.save(f"debug/debug_img_{index}.jpg")
+            if self._transform is not None: 
                 w, h = img.size
                 offset_y = random.randint(0, h - self.crop_size)
                 offset_x = random.randint(0, w - self.crop_size)
                 flip = random.randint(0, 1)
-                if self._transform is not None:
-                    img = self._transform(img, flip, offset_x, offset_y)
-            else:
-                if self._transform is not None:
-                    img = self._transform(img)
+                img = self._transform(img, flip, offset_x, offset_y)
+                aug_img = self._transform(aug_img, flip, offset_x, offset_y)
+
+            landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
+
+            return img, aug_img, label, au_relation, landmark
+        else:
+            img, label = self.data_list[index]
+            
+            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
+
+            if self.do_clahe and self.clahe_processor is None:
+                self.clahe_processor = RunCLAHE()
+            if self.do_clahe:
+                img = self.clahe_processor.run_clahe(img)
+
+            if self.conf.eval_fsrt and self.proportion_with_frst > 0.0:
+                if self.preprocessing is None:
+                    self.preprocessing = RunFRST(self.conf)
+                img = self.preprocessing.run_fsrt(img, index)[0]
+                if self.do_clahe:
+                    img = self.clahe_processor.run_clahe(img.numpy())
+                else:
+                    img = np.transpose(img, (2, 0, 1))
+
+            img = self.to_pil(img)
+            if self._transform is not None:
+                img = self._transform(img)
             return img, label
 
     def __len__(self):
@@ -153,7 +251,7 @@ class BP4D(Dataset):
 
 
 class DISFA(Dataset):
-    def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader):
+    def __init__(self, root_path, train=True, fold = 1, transform=None, crop_size = 224, stage=1, loader=default_loader, conf=None, epoch=None, fsrt_dataset_path=None):
 
         assert fold>0 and fold <=3, 'The fold num must be restricted from 1 to 3'
         assert stage>0 and stage <=2, 'The stage num must be restricted from 1 to 2'
@@ -190,30 +288,196 @@ class DISFA(Dataset):
             test_label_list_path = os.path.join(root_path, 'list', 'DISFA_test_label_fold' + str(fold) + '.txt')
             test_label_list = np.loadtxt(test_label_list_path)
             self.data_list = make_dataset(test_image_list, test_label_list, train=self._train)
-
-    def __getitem__(self, index, returnPath=False):
-        if self._train:
-            img, label, au_relation, landmark_path = self.data_list[index]
-
-            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
-            landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
-
-            return img, label, au_relation, landmark
+        self.to_pil = transforms.ToPILImage()
+        self.preprocessing = None
+        self.proportion_with_frst = conf.proportion_with_frst
+        if conf.do_clahe:
+            self.do_clahe = True
+            self.clahe_processor = None
         else:
-            img, label = self.data_list[index]
-            img = self.loader(os.path.join(self.img_folder_path, img))
+            self.do_clahe = False
+        self.conf = conf
+        self.epoch = epoch
+        if fsrt_dataset_path is not None:
+            self.fsrt_dataset_path = fsrt_dataset_path + "/DISFA_epoch" + str(epoch) + "/"
 
-            if self._train:
+    def __getitem__(self, index):
+        if self._train:
+            img_path, label, au_relation, landmark_path = self.data_list[index]
+
+            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img_path)), (256, 256))[..., :3])
+             
+            if self.proportion_with_frst == -1.0 or random.random() < self.proportion_with_frst:
+                aug_img = np.array(resize(imageio.imread(os.path.join(self.fsrt_dataset_path, img_path)), (256, 256))[..., :3])
+            else:
+                aug_img = img.copy()
+            
+
+            if self.do_clahe and self.clahe_processor is None:
+                self.clahe_processor = RunCLAHE()
+
+            if self.do_clahe:
+                img = self.clahe_processor.run_clahe(img)
+                aug_img = self.clahe_processor.run_clahe(aug_img)
+
+            img = self.to_pil(img)
+            aug_img = self.to_pil(aug_img)
+
+            # Save image for debugging
+            # img.save(f"debug/debug_img_{index}.jpg")
+            if self._transform is not None: 
                 w, h = img.size
                 offset_y = random.randint(0, h - self.crop_size)
                 offset_x = random.randint(0, w - self.crop_size)
                 flip = random.randint(0, 1)
-                if self._transform is not None:
-                    img = self._transform(img, flip, offset_x, offset_y)
-            else:
-                if self._transform is not None:
-                    img = self._transform(img)
+                img = self._transform(img, flip, offset_x, offset_y)
+                aug_img = self._transform(aug_img, flip, offset_x, offset_y)
+            
+            landmark = np.load(os.path.join(self.lmk_folder_path, landmark_path))
+
+            return img, aug_img, label, au_relation, landmark
+        else:
+            img, label = self.data_list[index]
+            
+            img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
+
+            if self.do_clahe and self.clahe_processor is None:
+                self.clahe_processor = RunCLAHE()
+            if self.do_clahe:
+                img = self.clahe_processor.run_clahe(img)
+
+            if self.conf.eval_fsrt and self.proportion_with_frst > 0.0:
+                if self.preprocessing is None:
+                    self.preprocessing = RunFRST(self.conf)
+                img = self.preprocessing.run_fsrt(img, index)[0]
+                if self.do_clahe:
+                    img = self.clahe_processor.run_clahe(img.numpy())
+                else:
+                    img = np.transpose(img, (2, 0, 1))
+
+            img = self.to_pil(img)
+            if self._transform is not None:
+                img = self._transform(img)
             return img, label
+
+    def __len__(self):
+        return len(self.data_list)
+
+class BothDatasets(Dataset):
+    def __init__(self, root_path_bp4d, root_path_disfa, train=True, fold=1, transform=None, crop_size=224, stage=1, loader=default_loader, conf=None, do_dataset=None, epoch=None, fsrt_dataset_path=None):
+        self.do_dataset = do_dataset
+        if do_dataset == "bp4d":
+            self.bp4d_dataset = BP4D(root_path_bp4d, train, fold, transform, crop_size, stage, loader, conf, epoch, fsrt_dataset_path)
+        elif do_dataset == "disfa":
+            self.disfa_dataset = DISFA(root_path_disfa, train, fold, transform, crop_size, stage, loader, conf, epoch, fsrt_dataset_path)
+        else:
+            raise Exception("do_dataset must be 'bp4d' or 'disfa'")
+        self.train = train
+        self.proportion_with_frst = conf.proportion_with_frst
+        self.epoch = epoch
+
+    def __getitem__(self, index):
+        # FACS name BP4D DISFA
+        # 1 Inner brow raiser ✓ ✓
+        # 2 Outer brow raiser ✓ ✓
+        # 4 Brow lowerer ✓ ✓
+        # 6 Cheek raiser ✓ ✓
+        # 7 Lid tightener ✓ ✗
+        # 9 Nose wrinkler ✗ ✓
+        # 10 Upper lip raiser ✓ ✗
+        # 12 Lip corner puller ✓ ✓
+        # 14 Dimpler ✓ ✗
+        # 15 Lip corner depressor ✓ ✗
+        # 17 Chin raiser ✓ ✗
+        # 23 Lip tightener ✓ ✗
+        # 24 Lip pressor ✓ ✗
+        # 25 Lips part ✗ ✓
+        # 26 Jaw drop ✗ ✓
+
+        if self.do_dataset == "bp4d":
+            if self.train:
+                img, aug_img, label, au_relation, landmark = self.bp4d_dataset[index]
+            else:
+                img, label = self.bp4d_dataset[index]
+            # Map BP4D labels to combined labels
+            combined_label = np.zeros(15, dtype=label.dtype)
+            combined_label[0] = label[0]  # AU1
+            combined_label[1] = label[1]  # AU2
+            combined_label[2] = label[2]  # AU4
+            combined_label[3] = label[3]  # AU6
+            combined_label[4] = label[4]  # AU7
+            combined_label[6] = label[5]  # AU10
+            combined_label[7] = label[6]  # AU12
+            combined_label[8] = label[7]  # AU14
+            combined_label[9] = label[8]  # AU15
+            combined_label[10] = label[9]  # AU17
+            combined_label[11] = label[10]  # AU23
+            combined_label[12] = label[11]  # AU24
+
+            if self.train:
+                return img, aug_img, combined_label, au_relation, landmark
+            else:
+                return img, combined_label
+        elif self.do_dataset == "disfa":
+            if self.train:
+                img, aug_img, label, au_relation, landmark = self.disfa_dataset[index]
+            else:
+                img, label = self.disfa_dataset[index]
+            # Map DISFA labels to combined labels
+            combined_label = np.zeros(15, dtype=label.dtype)
+            combined_label[0] = label[0]  # AU1
+            combined_label[1] = label[1]  # AU2
+            combined_label[2] = label[2]  # AU4
+            combined_label[3] = label[3]  # AU6
+            combined_label[5] = label[4]  # AU9
+            combined_label[7] = label[5]  # AU12
+            combined_label[13] = label[6]  # AU25
+            combined_label[14] = label[7]  # AU26 
+
+            if self.train:
+                return img, aug_img, combined_label, au_relation, landmark
+            else:
+                return img, combined_label
+        else:
+            raise Exception("do_dataset must be 'bp4d' or 'disfa'")
+
+    def __len__(self):
+        if self.do_dataset == "bp4d":
+            return len(self.bp4d_dataset)
+        elif self.do_dataset == "disfa":
+            return len(self.disfa_dataset)
+        else:
+            raise Exception("do_dataset must be 'bp4d' or 'disfa'")
+
+
+class EBplus(Dataset):
+    def __init__(self, root_path, transform=None, crop_size = 224, loader=default_loader):
+
+        self._root_path = root_path
+        self._transform = transform
+        self.crop_size = crop_size
+        self.loader = loader
+        self.img_folder_path = os.path.join(root_path,'img')
+        # img
+        image_list_path = os.path.join(root_path, 'list', 'EBplus_image_paths.txt')
+        image_list = open(image_list_path).readlines()
+        # img labels
+        label_list_path = os.path.join(root_path, 'list', 'EBplus_image_labels.txt')
+        label_list = np.loadtxt(label_list_path, dtype=str)
+        # Convert lists of strings to lists of integers
+        label_list = np.array([[int(val) for val in line] for line in label_list])
+        self.data_list = make_dataset(image_list, label_list, train=False)
+        self.to_pil = transforms.ToPILImage()
+            
+    def __getitem__(self, index):
+        img, label = self.data_list[index]
+        
+        img = np.array(resize(imageio.imread(os.path.join(self.img_folder_path, img)), (256, 256))[..., :3])
+
+        img = self.to_pil(img)
+        if self._transform is not None:
+            img = self._transform(img)
+        return img, label
 
     def __len__(self):
         return len(self.data_list)
