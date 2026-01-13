@@ -34,7 +34,7 @@ Fold | Recommendation | Link
 --- | --- | ---
 1 | Good, but not the best one. | [Huggingface Link](https://huggingface.co/dwsum/GenBGen_weights/tree/main/propWithFsrt_folds_smoothing0_3_proportion1_0_--limitFsrtLoss_numEncoderLayers3_batchsize256/fold1)
 2 | Good, but not the best one. | [Huggingface Link](https://huggingface.co/dwsum/GenBGen_weights/tree/main/propWithFsrt_folds_smoothing0_3_proportion1_0_--limitFsrtLoss_numEncoderLayers3_batchsize256/fold2)
-3 | Recommendation for best downstream task performance. | [Huggingface Link](https://huggingface.co/dwsum/GenBGen_weights/tree/main/propWithFsrt_folds_smoothing0_3_proportion1_0_--limitFsrtLoss_numEncoderLayers3_batchsize256/fold3))
+3 | Recommendation for best downstream task performance. | [Huggingface Link](https://huggingface.co/dwsum/GenBGen_weights/tree/main/propWithFsrt_folds_smoothing0_3_proportion1_0_--limitFsrtLoss_numEncoderLayers3_batchsize256/fold3)
 
 ## Run Prediction On An Image
 
