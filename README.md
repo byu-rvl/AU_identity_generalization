@@ -32,10 +32,14 @@ TODO: Add download for model weights.
 
 ## Run Prediction On An Image
 
-TODO: Add in ability to crop the image.
-
+To run the network exactly as trained crop the image using the code in preprocessing/Face_crop_align_mtcnn_mtcnn_detector.py. Once the face is cropped run:
 ```Bash
 python run.py --checkpoint path/to/downloaded/model/weights.pth --img path/to/image
+```
+
+To run on an uncropped image you can instead run this code. (Note, the cropping is slightly different, but should be very similar).
+```Bash
+python run.py --checkpoint path/to/downloaded/model/weights.pth --img path/to/image --crop
 ```
 
 ## Method Overview:
