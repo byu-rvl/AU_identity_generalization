@@ -28,7 +28,13 @@ pip install torch==2.8.0 torchvision==0.23.0 --index-url [https://download.pytor
 
 ## Download Model Weights
 
-TODO: Add download for model weights.
+Following previous manners, we did a 3 fold cross validation for the cross-corpus evaluation. As such, we release all three folds. However, for downstream applications that need the best generalized model, we suggest using fold 3 for predicting AUs.
+
+Fold | Recommendation | Link
+--- | --- | ---
+1 | Good, but not the best one. | [Huggingface Link](https://huggingface.co/dwsum/GenBGen_weights/tree/main/propWithFsrt_folds_smoothing0_3_proportion1_0_--limitFsrtLoss_numEncoderLayers3_batchsize256/fold1)
+2 | Good, but not the best one. | [Huggingface Link](https://huggingface.co/dwsum/GenBGen_weights/tree/main/propWithFsrt_folds_smoothing0_3_proportion1_0_--limitFsrtLoss_numEncoderLayers3_batchsize256/fold2)
+3 | Recommendation for best downstream task performance. | [Huggingface Link](https://huggingface.co/dwsum/GenBGen_weights/tree/main/propWithFsrt_folds_smoothing0_3_proportion1_0_--limitFsrtLoss_numEncoderLayers3_batchsize256/fold3))
 
 ## Run Prediction On An Image
 
