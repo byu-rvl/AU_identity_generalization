@@ -1,4 +1,4 @@
-# Beyond 41 Identities: Generalizing Facial Action Unit Recognition for Downstream Success
+# Towards Generalizing Facial Action Unit Recognition for Real-World Applications
 
 Authors:
 [Andrew Sumsion](https://www.linkedin.com/in/drew-sumsion/)
