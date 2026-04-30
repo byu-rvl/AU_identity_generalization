@@ -71,6 +71,20 @@ Contributions:
 
 4. We emphasize our model's increased generalization and usefulness by comparing our model's performance with other open source models on three downstream tasks. We outperform all other available open source AU recognition models for all three downstream tasks, while previous methods only perform well on one or a few of the downstream tasks. In addition, we increase the accuracy by up to 6.3 percentage points.
 
+## Individual AU Performance
+
+Upon request, we provide the performance on each AU for the BP4D and DISFA datasets. These results follow the standard 3 fold cross validation as is used in previous studies. Our method achieves competitive results with methods that are heavily-engineered to perform well directly on the BP4D and DISFA datasets. In contrast, our method focuses on high generalization across a variety of contexts, rather than only the BP4D and DISFA datasets.
+
+### BP4D
+| AU1 | AU2 | AU4 | AU6 | AU7 | AU10 | AU12 | AU14 | AU15 | AU17 | AU23 | AU24 | **Avg** |
+|:---:|:---:|:---:|:---:|:---:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|:-------:|
+| 56.60 | 49.12 | 60.59 | 75.95 | 79.38 | 84.75 | 87.53 | 65.47 | 51.14 | 63.44 | 48.26 | 54.66 | **64.74** |
+
+### DISFA
+| AU1 | AU2 | AU4 | AU6 | AU9 | AU12 | AU25 | AU26 | **Avg** |
+|:---:|:---:|:---:|:---:|:---:|:----:|:----:|:----:|:-------:|
+| 38.55 | 34.82 | 67.13 | 43.47 | 48.13 | 55.74 | 92.80 | 69.35 | **56.25** |
+
 ## BibTeX
 
 ```bibtex
