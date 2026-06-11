@@ -88,11 +88,14 @@ Upon request, we provide the performance on each AU for the BP4D and DISFA datas
 ## BibTeX
 
 ```bibtex
-@misc{yourproject2024,
-  author = {Your Name},
-  title = {My Awesome Project},
-  year = {2024},
-  publisher = {GitHub},
-  journal = {GitHub repository},
-  howpublished = {\url{https://github.com/yourusername/my-awesome-project}},
+@article{sumsion2026towards,
+  author    = {Sumsion, A. and Lee, D. J.},
+  title     = {Towards generalizing facial action unit recognition for real-world applications},
+  journal   = {Pattern Analysis and Applications},
+  volume    = {29},
+  number    = {116},
+  year      = {2026},
+  month     = {jun},
+  doi       = {10.1007/s10044-026-01693-0},
+  url       = {https://doi.org/10.1007/s10044-026-01693-0}
 }
